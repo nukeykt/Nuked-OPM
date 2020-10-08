@@ -185,6 +185,49 @@ static const freqtable_t pg_freqtable[64] = {
     0,    0, 0
 };
 
+static uint16_t OPM_KCToFNum(uint32_t kcode)
+{
+    int32_t kcode_h = kcode >> 4;
+    int32_t kcode_l = kcode & 15;
+    int32_t i, slope, sum = 0;
+    if (pg_freqtable[kcode_h].approxtype)
+    {
+        for (i = 0; i < 4; i++)
+        {
+            if (kcode_l & (1 << i))
+            {
+                sum += (pg_freqtable[kcode_h].slope >> (3 - i));
+            }
+        }
+    }
+    else
+    {
+        slope = pg_freqtable[kcode_h].slope | 1;
+        if (kcode_l & 1)
+        {
+            sum += (slope >> 3) + 2;
+        }
+        if (kcode_l & 2)
+        {
+            sum += 8;
+        }
+        if (kcode_l & 4)
+        {
+            sum += slope >> 1;
+        }
+        if (kcode_l & 8)
+        {
+            sum += slope;
+            sum++;
+        }
+        if ((kcode_l & 12) == 12 && (pg_freqtable[kcode_h].slope & 1) == 0)
+        {
+            sum += 4;
+        }
+    }
+    return pg_freqtable[kcode_h].basefreq + (sum >> 1);
+}
+
 void OPM_Write(opm_t *chip, uint32_t port, uint8_t data)
 {
 
