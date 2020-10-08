@@ -131,10 +131,10 @@ static const freqtable_t pg_freqtable[64] = {
     1479, 1, 21,
     1501, 1, 22,
     1523, 1, 22,
-    0,    0, 0,
-    0,    0, 0,
-    0,    0, 0,
-    0,    0, 0,
+    0,    0, 16,
+    0,    0, 16,
+    0,    0, 16,
+    0,    0, 16,
     1545, 1, 22,
     1567, 1, 22,
     1590, 1, 23,
@@ -147,10 +147,10 @@ static const freqtable_t pg_freqtable[64] = {
     1759, 1, 25,
     1785, 1, 26,
     1811, 1, 26,
-    0,    0, 0,
-    0,    0, 0,
-    0,    0, 0,
-    0,    0, 0,
+    0,    0, 16,
+    0,    0, 16,
+    0,    0, 16,
+    0,    0, 16,
     1837, 1, 26,
     1864, 1, 27,
     1891, 1, 27,
@@ -163,10 +163,10 @@ static const freqtable_t pg_freqtable[64] = {
     2092, 1, 30,
     2122, 1, 31,
     2153, 1, 31,
-    0,    0, 0,
-    0,    0, 0,
-    0,    0, 0,
-    0,    0, 0,
+    0,    0, 16,
+    0,    0, 16,
+    0,    0, 16,
+    0,    0, 16,
     2185, 1, 31,
     2216, 0, 31,
     2249, 0, 31,
@@ -179,13 +179,13 @@ static const freqtable_t pg_freqtable[64] = {
     2488, 0, 30,
     2524, 0, 30,
     2561, 0, 30,
-    0,    0, 0,
-    0,    0, 0,
-    0,    0, 0,
-    0,    0, 0
+    0,    0, 16,
+    0,    0, 16,
+    0,    0, 16,
+    0,    0, 16
 };
 
-static uint16_t OPM_KCToFNum(uint32_t kcode)
+static int32_t OPM_KCToFNum(int32_t kcode)
 {
     int32_t kcode_h = kcode >> 4;
     int32_t kcode_l = kcode & 15;
@@ -226,6 +226,124 @@ static uint16_t OPM_KCToFNum(uint32_t kcode)
         }
     }
     return pg_freqtable[kcode_h].basefreq + (sum >> 1);
+}
+
+static int32_t OPM_LFOApplyPMS(int32_t lfo, int32_t pms)
+{
+    int32_t b0, b1, b2, t, out;
+    int32_t top = (lfo >> 4) & 7;
+    if (pms != 7)
+    {
+        top >>= 1;
+        top |= 4;
+    }
+
+    b0 = (top >> 0) & 1;
+    b1 = (top >> 1) & 1;
+    b2 = (top >> 2) & 1;
+    t = (b1 || b2) && (b0 || b1 || pms < 6);
+
+    out = b0 + b1 * 2 + b2 * 5 + 6 + t;
+    out = out * 2 + ((lfo >> 4) & 1);
+
+    if (pms == 7)
+        out >>= 1;
+    out &= 15;
+    out = (lfo & 15) + out * 16;
+    switch (pms)
+    {
+    case 0:
+    default:
+        out = 0;
+        break;
+    case 1:
+        out = (out >> 5) & 3;
+        break;
+    case 2:
+        out = (out >> 4) & 7;
+        break;
+    case 3:
+        out = (out >> 3) & 15;
+        break;
+    case 4:
+        out = (out >> 2) & 31;
+        break;
+    case 5:
+        out = (out >> 1) & 63;
+        break;
+    case 6:
+        out = (out & 255) << 1;
+        break;
+    case 7:
+        out = (out & 255) << 2;
+        break;
+    }
+    return out;
+}
+
+int32_t OPM_CalcKCode(int32_t kcf, int32_t lfo, int32_t lfo_sign, int32_t dt)
+{
+    int32_t t2, t3, b0, b1, b2, b3, w2, w3, w4, w6;
+    int32_t overflow1 = 0;
+    int32_t overflow2 = 0;
+    int32_t negoverflow = 0;
+    int32_t sum = (kcf & 8191) + (lfo&8191);
+    int32_t cr = ((kcf & 255) + (lfo & 255)) >> 8;
+    if (sum & (1 << 13))
+    {
+        overflow1 = 1;
+    }
+    sum &= 8191;
+    if (lfo_sign && ((((sum >> 6) & 3) == 3) || cr))
+    {
+        sum += 64;
+    }
+    if (!lfo_sign && !cr)
+    {
+        sum += (-64)&8191;
+        negoverflow = 1;
+    }
+    if (sum & (1 << 13))
+    {
+        overflow2 = 1;
+    }
+    sum &= 8191;
+    if ((!lfo_sign && !overflow1) || (negoverflow && !overflow2))
+    {
+        sum = 0;
+    }
+    if (lfo_sign && (overflow1 || overflow2))
+    {
+        sum = 8127;
+    }
+        
+    t2 = sum & 63;
+    if (dt == 2)
+        t2 += 20;
+    if (dt == 2 || dt == 3)
+        t2 += 32;
+
+    b0 = (t2 >> 6) & 1;
+    b1 = dt == 2;
+    b2 = ((sum >> 6) & 1);
+    b3 = ((sum >> 7) & 1);
+
+
+    w2 = (b0 && b1 && b2);
+    w3 = (b0 && b3);
+    w4 = !w2 && !w3;
+    w6 = (b0 && !w2 && !w3) || (b3 && !b0 && b1);
+
+    t2 &= 63;
+
+    t3 = (sum >> 6) + w6 + b1 + (w2 || w3) * 2 + (dt == 3) * 4 + (dt != 0) * 8;
+    if (t3 & 128)
+    {
+        t2 = 63;
+        t3 = 126;
+    }
+    sum = t3 * 64 + t2;
+    return sum;
 }
 
 void OPM_Write(opm_t *chip, uint32_t port, uint8_t data)
