@@ -30,7 +30,74 @@
 
 
 typedef struct {
-    int cycles;
+    uint32_t cycles;
+    uint8_t ic;
+    // IO
+    uint8_t write_data;
+    uint8_t write_a;
+    uint8_t write_a_en;
+    uint8_t write_d;
+    uint8_t write_d_en;
+    uint8_t write_busy;
+    uint8_t write_busy_cnt;
+    uint8_t mode_address;
+    uint8_t io_ct1;
+    uint8_t io_ct2;
+
+    // LFO
+    uint8_t lfo_am_lock;
+    uint8_t lfo_pm_lock;
+
+    // Phase Gen
+    uint16_t pg_fnum[32];
+    uint8_t pg_kcode[32];
+    uint32_t pg_inc[32];
+    uint32_t pg_phase[32];
+    uint8_t pg_reset[32];
+    uint8_t pg_reset_latch[32];
+    uint8_t pg_reset_lt;
+
+    // Register set
+    uint8_t mode_test[8];
+    uint8_t mode_kon_operator[4];
+    uint8_t mode_kon_channel;
+
+    uint8_t reg_address;
+    uint8_t reg_address_ready;
+    uint8_t reg_data;
+    uint8_t reg_data_ready;
+
+    uint8_t ch_rl[8];
+    uint8_t ch_fb[8];
+    uint8_t ch_connect[8];
+    uint8_t ch_kc[8];
+    uint8_t ch_kf[8];
+    uint8_t ch_pms[8];
+    uint8_t ch_ams[8];
+
+    uint8_t sl_dt1[32];
+    uint8_t sl_mul[32];
+    uint8_t sl_tl[32];
+    uint8_t sl_ks[32];
+    uint8_t sl_ar[32];
+    uint8_t sl_am_e[32];
+    uint8_t sl_d1r[32];
+    uint8_t sl_dt2[32];
+    uint8_t sl_d2r[32];
+    uint8_t sl_d1l[32];
+    uint8_t sl_rr[32];
+
+    uint8_t noise_en;
+    uint8_t noise_freq;
+
+    uint16_t timer_a_reg;
+    uint8_t timer_b_reg;
+
+    uint8_t lfo_freq_hi;
+    uint8_t lfo_freq_lo;
+    uint8_t lfo_pmd;
+    uint8_t lfo_amd;
+    uint8_t lfo_wave;
 } opm_t;
 
 #endif
