@@ -28,6 +28,13 @@
 #include <stdint.h>
 #include "opm.h"
 
+enum {
+    eg_num_attack = 0,
+    eg_num_decay = 1,
+    eg_num_sustain = 2,
+    eg_num_release = 3
+};
+
 /* logsin table */
 static const uint16_t logsinrom[256] = {
     0x859, 0x6c3, 0x607, 0x58b, 0x52e, 0x4e4, 0x4a6, 0x471,
@@ -425,6 +432,73 @@ static void OPM_PhaseGenerate(opm_t *chip)
     chip->pg_reset_lt = pg_reset_latch;
 }
 
+static void OPM_KeyOn1(opm_t *chip)
+{
+    uint32_t cycles = (chip->cycles + 1) % 32;
+    chip->kon_chanmatch = 0;
+    if (chip->mode_kon_channel + 24 == cycles)
+    {
+        chip->kon_chanmatch = 1;
+    }
+}
+
+static void OPM_KeyOn2(opm_t *chip)
+{
+    uint32_t slot = (chip->cycles + 8) % 32;
+    if (chip->kon_chanmatch)
+    {
+        chip->mode_kon[(slot + 0) % 32] = chip->mode_kon_operator[0];
+        chip->mode_kon[(slot + 8) % 32] = chip->mode_kon_operator[2];
+        chip->mode_kon[(slot + 16) % 32] = chip->mode_kon_operator[1];
+        chip->mode_kon[(slot + 24) % 32] = chip->mode_kon_operator[3];
+    }
+}
+
+static void OPM_EnvelopePhase1(opm_t *chip)
+{
+    uint32_t slot = (chip->cycles + 30) % 32;
+    uint32_t kon = chip->mode_kon[slot] | chip->kon_csm;
+    uint32_t konevent = !chip->kon[slot] && kon;
+
+
+
+
+    chip->kon[slot] = kon;
+}
+
+static void OPM_EnvelopePhase2(opm_t *chip)
+{
+    uint32_t slot = chip->cycles;
+    uint8_t rate = 0;
+    switch (chip->eg_ratesel)
+    {
+    case eg_num_attack:
+        rate = chip->sl_ar[slot];
+        break;
+    case eg_num_decay:
+        rate = chip->sl_d1r[slot];
+        break;
+    case eg_num_sustain:
+        rate = chip->sl_d2r[slot];
+        break;
+    case eg_num_release:
+        rate = chip->sl_rr[slot] * 2 + 1;
+        break;
+    default:
+        break;
+    }
+    if (chip->ic)
+        rate = 31;
+
+    chip->eg_rate = rate;
+    chip->eg_ksv = chip->pg_kcode[slot] >> (chip->sl_ks[slot] ^ 3);
+    /* Delay TL & SL value */
+    chip->eg_tl[1] = chip->eg_tl[0];
+    chip->eg_tl[0] = chip->sl_tl[slot];
+    chip->eg_sl[1] = chip->eg_sl[0];
+    chip->eg_sl[0] = chip->sl_d1l[slot];
+}
+
 static void OPM_DoIO(opm_t *chip)
 {
     // Busy
@@ -615,8 +689,13 @@ static void OPM_DoIC(opm_t *chip)
 
 void OPM_Clock(opm_t *chip, int32_t *output)
 {
+    OPM_EnvelopePhase2(chip);
+    OPM_EnvelopePhase1(chip);
+    OPM_PhaseGenerate(chip);
     OPM_PhaseCalcFNumBlock(chip);
+    OPM_KeyOn2(chip);
     OPM_DoRegWrite(chip);
+    OPM_KeyOn1(chip);
     OPM_DoIO(chip);
     OPM_DoIC(chip);
     chip->cycles = (chip->cycles + 1) % 32;

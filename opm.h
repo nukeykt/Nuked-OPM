@@ -48,6 +48,14 @@ typedef struct {
     uint8_t lfo_am_lock;
     uint8_t lfo_pm_lock;
 
+    // Env Gen
+    uint8_t eg_state[32];
+    uint8_t eg_rate;
+    uint8_t eg_ksv;
+    uint8_t eg_ratesel;
+    uint8_t eg_sl[2];
+    uint8_t eg_tl[2];
+
     // Phase Gen
     uint16_t pg_fnum[32];
     uint8_t pg_kcode[32];
@@ -98,6 +106,12 @@ typedef struct {
     uint8_t lfo_pmd;
     uint8_t lfo_amd;
     uint8_t lfo_wave;
+
+    uint8_t kon_csm;
+    uint8_t kon_do;
+    uint8_t kon_chanmatch;
+    uint8_t kon[32];
+    uint8_t mode_kon[32];
 } opm_t;
 
 #endif
