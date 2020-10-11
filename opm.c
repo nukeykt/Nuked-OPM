@@ -456,21 +456,23 @@ static void OPM_KeyOn2(opm_t *chip)
 
 static void OPM_EnvelopePhase1(opm_t *chip)
 {
-    uint32_t slot = (chip->cycles + 30) % 32;
+    uint32_t slot = (chip->cycles + 2) % 32;
     uint32_t kon = chip->mode_kon[slot] | chip->kon_csm;
     uint32_t konevent = !chip->kon[slot] && kon;
+    if (konevent)
+    {
+        chip->eg_state[slot] = eg_num_attack;
+    }
 
-
-
-
+    chip->kon2[slot] = chip->kon[slot];
     chip->kon[slot] = kon;
 }
 
 static void OPM_EnvelopePhase2(opm_t *chip)
 {
     uint32_t slot = chip->cycles;
-    uint8_t rate = 0;
-    switch (chip->eg_ratesel)
+    uint8_t rate = 0, ksv, zr;
+    switch (chip->eg_state[slot])
     {
     case eg_num_attack:
         rate = chip->sl_ar[slot];
@@ -489,14 +491,71 @@ static void OPM_EnvelopePhase2(opm_t *chip)
     }
     if (chip->ic)
         rate = 31;
+    
+    zr = rate == 0;
 
-    chip->eg_rate = rate;
-    chip->eg_ksv = chip->pg_kcode[slot] >> (chip->sl_ks[slot] ^ 3);
-    /* Delay TL & SL value */
+    ksv = chip->pg_kcode[slot] >> (chip->sl_ks[slot] ^ 3);
+    if (chip->sl_ks[slot] == 0 && zr)
+        ksv &= ~3;
+    rate = rate * 2 + ksv;
+    if (rate & 64)
+        rate = 63;
+
     chip->eg_tl[1] = chip->eg_tl[0];
     chip->eg_tl[0] = chip->sl_tl[slot];
     chip->eg_sl[1] = chip->eg_sl[0];
     chip->eg_sl[0] = chip->sl_d1l[slot];
+    chip->eg_zr[1] = chip->eg_zr[0];
+    chip->eg_zr[0] = zr;
+    chip->eg_rate[1] = chip->eg_rate[0];
+    chip->eg_rate[0] = rate;
+    chip->eg_ratemax[1] = chip->eg_ratemax[0];
+    chip->eg_ratemax[0] = (rate >> 1) == 31;
+}
+
+static void OPM_EnvelopePhase3(opm_t *chip)
+{
+    chip->eg_shift = (chip->eg_timershift_lock + (chip->eg_rate[0] >> 2)) & 15;
+    chip->eg_inchi = eg_stephi[chip->eg_rate[0] & 3][chip->eg_timer_lock & 3];
+}
+
+static void OPM_EnvelopePhase4(opm_t *chip)
+{
+    uint32_t slot = (chip->cycles + 30) % 32;
+    uint8_t inc = 0;
+    uint8_t kon;
+    if (chip->eg_clock & 2)
+    {
+        if (chip->eg_rate[1] >= 48)
+        {
+            inc = chip->eg_inchi + (chip->eg_rate[1] >> 2) - 11;
+            if (inc > 4)
+            {
+                inc = 4;
+            }
+        }
+        else
+        {
+            switch (chip->eg_shift)
+            {
+            case 12:
+                inc = chip->eg_rate[1] != 0;
+                break;
+            case 13:
+                inc = (chip->eg_rate[1] >> 1) & 1;
+                break;
+            case 14:
+                inc = chip->eg_rate[1] & 1;
+                break;
+            }
+        }
+    }
+    chip->eg_inc = inc;
+
+    kon = chip->kon[slot] && !chip->kon2[slot];
+    chip->pg_reset[slot] = kon;
+    
+    chip->eg_instantattack = chip->eg_ratemax[1] && (kon || !chip->eg_ratemax[1]);
 }
 
 static void OPM_DoIO(opm_t *chip)
