@@ -115,6 +115,9 @@ static const uint32_t eg_stephi[4][4] = {
     { 1, 1, 1, 0 }
 };
 
+static const uint32_t eg_am_shift[4] = {
+    8, 3, 1, 0
+};
 
 /* Phase generator */
 static const uint32_t pg_detune[8] = { 16, 17, 19, 20, 22, 24, 27, 29 };
@@ -471,7 +474,8 @@ static void OPM_EnvelopePhase1(opm_t *chip)
 static void OPM_EnvelopePhase2(opm_t *chip)
 {
     uint32_t slot = chip->cycles;
-    uint8_t rate = 0, ksv, zr;
+    uint32_t chan = slot % 8;
+    uint8_t rate = 0, ksv, zr, ams;
     switch (chip->eg_state[slot])
     {
     case eg_num_attack:
@@ -501,6 +505,7 @@ static void OPM_EnvelopePhase2(opm_t *chip)
     if (rate & 64)
         rate = 63;
 
+    chip->eg_tl[2] = chip->eg_tl[1];
     chip->eg_tl[1] = chip->eg_tl[0];
     chip->eg_tl[0] = chip->sl_tl[slot];
     chip->eg_sl[1] = chip->eg_sl[0];
@@ -511,19 +516,29 @@ static void OPM_EnvelopePhase2(opm_t *chip)
     chip->eg_rate[0] = rate;
     chip->eg_ratemax[1] = chip->eg_ratemax[0];
     chip->eg_ratemax[0] = (rate >> 1) == 31;
+    ams = chip->sl_am_e[slot] ? chip->ch_ams[chan] : 0;
+    chip->eg_am = chip->lfo_am_lock >> eg_am_shift[ams];
 }
 
 static void OPM_EnvelopePhase3(opm_t *chip)
 {
+    uint32_t slot = (chip->cycles + 31) % 32;
     chip->eg_shift = (chip->eg_timershift_lock + (chip->eg_rate[0] >> 2)) & 15;
     chip->eg_inchi = eg_stephi[chip->eg_rate[0] & 3][chip->eg_timer_lock & 3];
+
+    chip->eg_outtemp[1] = chip->eg_outtemp[0];
+    chip->eg_outtemp[0] = chip->eg_level[slot] + chip->eg_am;
+    if (chip->eg_outtemp[0] & 1024)
+    {
+        chip->eg_outtemp[0] = 1023;
+    }
 }
 
 static void OPM_EnvelopePhase4(opm_t *chip)
 {
     uint32_t slot = (chip->cycles + 30) % 32;
     uint8_t inc = 0;
-    uint8_t kon;
+    uint8_t kon, eg_off, eg_zero, slreach;
     if (chip->eg_clock & 2)
     {
         if (chip->eg_rate[1] >= 48)
@@ -554,8 +569,126 @@ static void OPM_EnvelopePhase4(opm_t *chip)
 
     kon = chip->kon[slot] && !chip->kon2[slot];
     chip->pg_reset[slot] = kon;
-    
     chip->eg_instantattack = chip->eg_ratemax[1] && (kon || !chip->eg_ratemax[1]);
+
+    eg_off = (chip->eg_level[slot] & 0x3f0) == 0x3f0;
+    slreach = (chip->eg_level[slot] >> 5) == chip->eg_sl[1];
+    eg_zero = chip->eg_level[slot] == 0;
+
+    chip->eg_mute = eg_off && chip->eg_state[slot] != eg_num_attack && !kon;
+    chip->eg_inclinear = 0;
+    if (!kon && !eg_off)
+    {
+        switch (chip->eg_state[slot])
+        {
+        case eg_num_decay:
+            if (!slreach)
+                chip->eg_inclinear = 1;
+            break;
+        case eg_num_sustain:
+        case eg_num_release:
+            chip->eg_inclinear = 1;
+            break;
+        }
+    }
+    chip->eg_incattack = chip->eg_state[slot] == eg_num_attack && !chip->eg_ratemax[1] && chip->kon[slot] && eg_zero;
+
+
+    // Update state
+    if (kon)
+    {
+        chip->eg_state[slot] = eg_num_attack;
+    }
+    else if (!chip->kon[slot])
+    {
+        chip->eg_state[slot] = eg_num_release;
+    }
+    else
+    {
+        switch (chip->eg_state[slot])
+        {
+        case eg_num_attack:
+            if (eg_zero)
+            {
+                chip->eg_state[slot] = eg_num_decay;
+            }
+            break;
+        case eg_num_decay:
+            if (eg_off)
+            {
+                chip->eg_state[slot] = eg_num_release;
+            }
+            else if (slreach)
+            {
+                chip->eg_state[slot] = eg_num_sustain;
+            }
+            break;
+        case eg_num_sustain:
+            if (eg_off)
+            {
+                chip->eg_state[slot] = eg_num_release;
+            }
+            break;
+        case eg_num_release:
+            break;
+        }
+    }
+
+    if (chip->ic)
+    {
+        chip->eg_state[slot] = eg_num_release;
+    }
+}
+
+static void OPM_EnvelopePhase5(opm_t *chip)
+{
+    uint32_t slot = (chip->cycles + 29) % 32;
+    uint32_t level = chip->eg_level[slot];
+    uint32_t step = 0;
+    if (chip->eg_instantattack)
+    {
+        level = 0;
+    }
+    if (chip->eg_mute)
+    {
+        level = 0x3ff;
+    }
+    if (chip->eg_inc)
+    {
+        if (chip->eg_inclinear)
+        {
+            step |= 1 << (chip->eg_inc - 1);
+        }
+        if (chip->eg_incattack)
+        {
+            step |= ((~(int32_t)chip->eg_level[slot]) << chip->eg_inc) >> 5;
+        }
+    }
+    level += step;
+    chip->eg_level[slot] = (uint16_t)level;
+
+    chip->eg_out = chip->eg_outtemp[1] + (chip->eg_tl[2] << 3);
+    if (chip->eg_out & 1024)
+    {
+        chip->eg_out = 1023;
+    }
+}
+
+static void OPM_EnvelopeClock(opm_t *chip)
+{
+    chip->eg_clock <<= 1;
+    if ((chip->eg_clockcnt & 2) != 0 || chip->mode_test[0])
+    {
+        chip->eg_clock |= 1;
+    }
+    if (chip->ic || (chip->cycles == 31 && (chip->eg_clockcnt & 2) != 0))
+    {
+        chip->eg_clockcnt = 0;
+    }
+    else if (chip->cycles == 31)
+    {
+        chip->eg_clockcnt++;
+    }
 }
 
 static void OPM_DoIO(opm_t *chip)
@@ -748,12 +881,18 @@ static void OPM_DoIC(opm_t *chip)
 
 void OPM_Clock(opm_t *chip, int32_t *output)
 {
+    OPM_EnvelopePhase5(chip);
+    OPM_EnvelopePhase4(chip);
+    OPM_EnvelopePhase3(chip);
     OPM_EnvelopePhase2(chip);
     OPM_EnvelopePhase1(chip);
+
     OPM_PhaseGenerate(chip);
     OPM_PhaseCalcFNumBlock(chip);
+
     OPM_KeyOn2(chip);
     OPM_DoRegWrite(chip);
+    OPM_EnvelopeClock(chip);
     OPM_KeyOn1(chip);
     OPM_DoIO(chip);
     OPM_DoIC(chip);

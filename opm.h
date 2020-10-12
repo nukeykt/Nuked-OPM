@@ -50,18 +50,29 @@ typedef struct {
 
     // Env Gen
     uint8_t eg_state[32];
+    uint16_t eg_level[32];
     uint8_t eg_rate[2];
     uint8_t eg_sl[2];
-    uint8_t eg_tl[2];
+    uint8_t eg_tl[3];
     uint8_t eg_zr[2];
     uint8_t eg_timershift_lock;
     uint8_t eg_timer_lock;
     uint8_t eg_inchi;
     uint8_t eg_shift;
     uint8_t eg_clock;
+    uint8_t eg_clockcnt;
+    uint8_t eg_clockquotinent;
     uint8_t eg_inc;
     uint8_t eg_ratemax[2];
     uint8_t eg_instantattack;
+    uint8_t eg_inclinear;
+    uint8_t eg_incattack;
+    uint8_t eg_mute;
+    uint16_t eg_outtemp[2];
+    uint16_t eg_out;
+    uint8_t eg_am;
+    uint8_t eg_ams[2];
+    
 
     // Phase Gen
     uint16_t pg_fnum[32];
