@@ -70,13 +70,15 @@ typedef struct {
     uint8_t eg_incattack;
     uint8_t eg_mute;
     uint16_t eg_outtemp[2];
-    uint16_t eg_out;
+    uint16_t eg_out[2];
     uint8_t eg_am;
     uint8_t eg_ams[2];
     uint8_t eg_timercarry;
     uint32_t eg_timer;
     uint32_t eg_timer2;
     uint8_t eg_timerbstop;
+    uint32_t eg_serial;
+    uint8_t eg_serial_bit;
     
 
     // Phase Gen
@@ -86,7 +88,29 @@ typedef struct {
     uint32_t pg_phase[32];
     uint8_t pg_reset[32];
     uint8_t pg_reset_latch[32];
-    uint8_t pg_reset_lt;
+    uint32_t pg_serial;
+    uint8_t pg_serial_bit;
+
+    // Operator
+    uint16_t op_phase_in;
+    uint16_t op_mod_in;
+    uint16_t op_phase;
+    uint16_t op_logsin[3];
+    uint16_t op_atten;
+    uint16_t op_exp[2];
+    uint8_t op_pow[2];
+    uint32_t op_sign;
+    int16_t op_out[6];
+    uint32_t op_connect;
+    uint8_t op_counter;
+    uint8_t op_fbupdate;
+    uint8_t op_fbshift;
+    uint8_t op_c1update;
+    uint8_t op_modtable[5];
+    int16_t op_m1[8][2];
+    int16_t op_c1[8];
+    int16_t op_mod[3];
+    int16_t op_fb[2];
 
     // Register set
     uint8_t mode_test[8];
