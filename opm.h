@@ -32,6 +32,7 @@
 typedef struct {
     uint32_t cycles;
     uint8_t ic;
+    uint8_t ic2;
     // IO
     uint8_t write_data;
     uint8_t write_a;
@@ -72,6 +73,10 @@ typedef struct {
     uint16_t eg_out;
     uint8_t eg_am;
     uint8_t eg_ams[2];
+    uint8_t eg_timercarry;
+    uint32_t eg_timer;
+    uint32_t eg_timer2;
+    uint8_t eg_timerbstop;
     
 
     // Phase Gen

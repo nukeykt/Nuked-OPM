@@ -691,6 +691,50 @@ static void OPM_EnvelopeClock(opm_t *chip)
     }
 }
 
+static void OPM_EnvelopeTimer(opm_t *chip)
+{
+    uint32_t cycle = (chip->cycles + 31) % 16;
+    uint32_t cycle2;
+    uint8_t inc = ((chip->cycles + 31) % 32) < 16 && (chip->eg_clock & 1) != 0 && (cycle == 0 || chip->eg_timercarry);
+    uint8_t timerbit = (chip->eg_timer >> cycle) & 1;
+    uint8_t sum = timerbit + inc;
+    uint8_t sum0 = (sum & 1) && !chip->ic;
+    chip->eg_timercarry = sum >> 1;
+    chip->eg_timer = (chip->eg_timer & (~(1 << cycle))) | (sum0 << cycle);
+
+    cycle2 = (chip->cycles + 30) % 16;
+
+    chip->eg_timer2 <<= 1;
+    if ((chip->eg_timer & (1 << cycle2)) != 0 && !chip->eg_timerbstop)
+    {
+        chip->eg_timer2 |= 1;
+    }
+
+    if (chip->eg_timer & (1 << cycle2))
+    {
+        chip->eg_timerbstop = 1;
+    }
+
+    if (cycle == 0 || chip->ic2)
+    {
+        chip->eg_timerbstop = 0;
+    }
+
+    if (chip->cycles == 1 && (chip->eg_clock & 1) != 0)
+    {
+        chip->eg_timershift_lock = 0;
+        if (chip->eg_timer2 & (8 + 32 + 128 + 512 + 2048 + 8192 + 32768))
+            chip->eg_timershift_lock |= 1;
+        if (chip->eg_timer2 & (4 + 32 + 64 + 512 + 1024 + 8192 + 16384))
+            chip->eg_timershift_lock |= 2;
+        if (chip->eg_timer2 & (4 + 8 + 16 + 512 + 1024 + 2048 + 4096))
+            chip->eg_timershift_lock |= 4;
+        if (chip->eg_timer2 & (4 + 8 + 16 + 32 + 64 + 128 + 256))
+            chip->eg_timershift_lock |= 8;
+        chip->eg_timer_lock = chip->eg_timer;
+    }
+}
+
 static void OPM_DoIO(opm_t *chip)
 {
     // Busy
@@ -877,10 +921,12 @@ static void OPM_DoIC(opm_t *chip)
         chip->sl_d1l[slot] = 0;
         chip->sl_rr[slot] = 0;
     }
+    chip->ic2 = chip->ic;
 }
 
 void OPM_Clock(opm_t *chip, int32_t *output)
 {
+    OPM_EnvelopeTimer(chip);
     OPM_EnvelopePhase5(chip);
     OPM_EnvelopePhase4(chip);
     OPM_EnvelopePhase3(chip);
