@@ -111,6 +111,14 @@ typedef struct {
     int16_t op_c1[8];
     int16_t op_mod[3];
     int16_t op_fb[2];
+    uint8_t op_mixl;
+    uint8_t op_mixr;
+
+    // Mixer
+
+    int32_t mix[2];
+    int32_t mix2[2];
+    int32_t mix_op;
 
     // Register set
     uint8_t mode_test[8];
