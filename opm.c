@@ -1049,6 +1049,88 @@ static void OPM_NoiseTimer(opm_t *chip)
     chip->noise_timer_of = timer == chip->noise_freq;
 }
 
+static void OPM_DoTimerA(opm_t *chip)
+{
+    uint16_t value = chip->timer_a_val;
+    if (chip->timer_a_do_reset)
+    {
+        value = 0;
+    }
+    if (chip->timer_a_do_load)
+    {
+        value = chip->timer_a_reg;
+    }
+
+    chip->timer_a_of = (chip->timer_a_val_temp >> 10);
+    chip->timer_a_val_temp = value + chip->timer_a_inc;
+}
+
+static void OPM_DoTimerA2(opm_t* chip)
+{
+    if (chip->cycles == 1)
+    {
+        chip->timer_a_load = chip->timer_loada;
+    }
+    chip->timer_a_inc = chip->mode_test[2] || (!chip->timer_a_load && chip->cycles == 0);
+    chip->timer_a_do_load = chip->timer_a_of || (!chip->timer_a_load && chip->timer_a_temp);
+    chip->timer_a_do_reset = chip->timer_a_temp;
+    chip->timer_a_temp = chip->timer_a_load;
+    if (chip->timer_reseta)
+    {
+        chip->timer_a_status = 0;
+    }
+    else
+    {
+        chip->timer_a_status |= chip->timer_irqa && chip->timer_a_of;
+    }
+    chip->timer_reseta = 0;
+}
+
+static void OPM_DoTimerB(opm_t *chip)
+{
+    uint16_t value = chip->timer_b_val;
+    if (chip->timer_b_do_reset)
+    {
+        value = 0;
+    }
+    if (chip->timer_b_do_load)
+    {
+        value = chip->timer_b_reg;
+    }
+
+    chip->timer_b_of = (chip->timer_b_val_temp >> 8) & 1;
+    chip->timer_b_val_temp = value + chip->timer_b_inc;
+
+    if (chip->cycles == 0)
+    {
+        chip->timer_b_sub++;
+    }
+
+    chip->timer_b_sub_of = (chip->timer_b_sub >> 4) & 1;
+    chip->timer_b_sub &= 15;
+    if (chip->ic)
+    {
+        chip->timer_b_sub = 0;
+    }
+}
+
+static void OPM_DoTimerB2(opm_t* chip)
+{
+    chip->timer_b_inc = chip->mode_test[2] || (!chip->timer_loadb && chip->timer_b_sub_of);
+    chip->timer_b_do_load = chip->timer_b_of || (!chip->timer_loadb && chip->timer_b_temp);
+    chip->timer_b_do_reset = chip->timer_b_temp;
+    chip->timer_b_temp = chip->timer_loadb;
+    if (chip->timer_resetb)
+    {
+        chip->timer_b_status = 0;
+    }
+    else
+    {
+        chip->timer_b_status |= chip->timer_irqb && chip->timer_b_of;
+    }
+    chip->timer_resetb = 0;
+}
+
 static void OPM_DoIO(opm_t *chip)
 {
     // Busy
@@ -1163,6 +1245,13 @@ static void OPM_DoRegWrite(opm_t *chip)
             chip->timer_b_reg = chip->write_data;
             break;
         case 0x14:
+            chip->mode_csm = (chip->write_data >> 7) & 1;
+            chip->timer_irqb = (chip->write_data >> 3) & 1;
+            chip->timer_irqa = (chip->write_data >> 2) & 1;
+            chip->timer_resetb = (chip->write_data >> 3) & 1;
+            chip->timer_reseta = (chip->write_data >> 2) & 1;
+            chip->timer_loadb = (chip->write_data >> 1) & 1;
+            chip->timer_loada = (chip->write_data >> 0) & 1;
             break;
         case 0x18:
             chip->lfo_freq_hi = chip->write_data >> 4;
@@ -1234,6 +1323,14 @@ static void OPM_DoIC(opm_t *chip)
         chip->sl_d2r[slot] = 0;
         chip->sl_d1l[slot] = 0;
         chip->sl_rr[slot] = 0;
+
+        chip->timer_a_reg = 0;
+        chip->timer_b_reg = 0;
+        chip->timer_irqa = 0;
+        chip->timer_irqb = 0;
+        chip->timer_loada = 0;
+        chip->timer_loadb = 0;
+        chip->mode_csm = 0;
     }
     chip->ic2 = chip->ic;
 }
@@ -1274,7 +1371,8 @@ void OPM_Clock(opm_t *chip, int32_t *output)
     OPM_PhaseCalcFNumBlock(chip);
 
     OPM_Noise(chip);
-
+    OPM_DoTimerA(chip);
+    OPM_DoTimerB(chip);
     OPM_KeyOn2(chip);
     OPM_DoRegWrite(chip);
     OPM_EnvelopeClock(chip);
@@ -1282,6 +1380,8 @@ void OPM_Clock(opm_t *chip, int32_t *output)
     OPM_KeyOn1(chip);
     OPM_DoIO(chip);
     OPM_DoIC(chip);
+    OPM_DoTimerA2(chip);
+    OPM_DoTimerB2(chip);
 
     // temp
     output[0] = chip->mix[0];

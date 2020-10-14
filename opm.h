@@ -162,12 +162,33 @@ typedef struct {
 
     uint16_t timer_a_reg;
     uint8_t timer_b_reg;
+    uint8_t timer_a_temp;
+    uint8_t timer_a_do_reset, timer_a_do_load;
+    uint8_t timer_a_inc;
+    uint16_t timer_a_val, timer_a_val_temp;
+    uint8_t timer_a_of;
+    uint8_t timer_a_load;
+    uint8_t timer_a_status;
+
+    uint8_t timer_b_sub;
+    uint8_t timer_b_sub_of;
+    uint8_t timer_b_inc;
+    uint16_t timer_b_val, timer_b_val_temp;
+    uint8_t timer_b_of;
+    uint8_t timer_b_do_reset, timer_b_do_load;
+    uint8_t timer_b_temp;
+    uint8_t timer_b_status;
 
     uint8_t lfo_freq_hi;
     uint8_t lfo_freq_lo;
     uint8_t lfo_pmd;
     uint8_t lfo_amd;
     uint8_t lfo_wave;
+
+    uint8_t timer_irqa, timer_irqb;
+    uint8_t timer_loada, timer_loadb;
+    uint8_t timer_reseta, timer_resetb;
+    uint8_t mode_csm;
 
     uint8_t kon_csm;
     uint8_t kon_do;
