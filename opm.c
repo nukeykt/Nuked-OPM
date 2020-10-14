@@ -199,33 +199,33 @@ static const freqtable_t pg_freqtable[64] = {
 /* FM algorithm */
 static const uint32_t fm_algorithm[4][6][8] = {
     {
-        { 1, 1, 1, 1, 1, 1, 1, 1 }, /* OP1_0         */
-        { 1, 1, 1, 1, 1, 1, 1, 1 }, /* OP1_1         */
-        { 0, 0, 0, 0, 0, 0, 0, 0 }, /* OP2           */
+        { 1, 1, 1, 1, 1, 1, 1, 1 }, /* M1_0          */
+        { 1, 1, 1, 1, 1, 1, 1, 1 }, /* M1_1          */
+        { 0, 0, 0, 0, 0, 0, 0, 0 }, /* C1            */
         { 0, 0, 0, 0, 0, 0, 0, 0 }, /* Last operator */
         { 0, 0, 0, 0, 0, 0, 0, 0 }, /* Last operator */
         { 0, 0, 0, 0, 0, 0, 0, 1 }  /* Out           */
     },
     {
-        { 0, 1, 0, 0, 0, 1, 0, 0 }, /* OP1_0         */
-        { 0, 0, 0, 0, 0, 0, 0, 0 }, /* OP1_1         */
-        { 1, 1, 1, 0, 0, 0, 0, 0 }, /* OP2           */
+        { 0, 1, 0, 0, 0, 1, 0, 0 }, /* M1_0          */
+        { 0, 0, 0, 0, 0, 0, 0, 0 }, /* M1_1          */
+        { 1, 1, 1, 0, 0, 0, 0, 0 }, /* C1            */
         { 0, 0, 0, 0, 0, 0, 0, 0 }, /* Last operator */
         { 0, 0, 0, 0, 0, 0, 0, 0 }, /* Last operator */
         { 0, 0, 0, 0, 0, 1, 1, 1 }  /* Out           */
     },
     {
-        { 0, 0, 0, 0, 0, 0, 0, 0 }, /* OP1_0         */
-        { 0, 0, 0, 0, 0, 0, 0, 0 }, /* OP1_1         */
-        { 0, 0, 0, 0, 0, 0, 0, 0 }, /* OP2           */
+        { 0, 0, 0, 0, 0, 0, 0, 0 }, /* M1_0          */
+        { 0, 0, 0, 0, 0, 0, 0, 0 }, /* M1_1          */
+        { 0, 0, 0, 0, 0, 0, 0, 0 }, /* C1            */
         { 1, 0, 0, 1, 1, 1, 1, 0 }, /* Last operator */
         { 0, 0, 0, 0, 0, 0, 0, 0 }, /* Last operator */
         { 0, 0, 0, 0, 1, 1, 1, 1 }  /* Out           */
     },
     {
-        { 0, 0, 1, 0, 0, 1, 0, 0 }, /* OP1_0         */
-        { 0, 0, 0, 0, 0, 0, 0, 0 }, /* OP1_1         */
-        { 0, 0, 0, 1, 0, 0, 0, 0 }, /* OP2           */
+        { 0, 0, 1, 0, 0, 1, 0, 0 }, /* M1_0          */
+        { 0, 0, 0, 0, 0, 0, 0, 0 }, /* M1_1          */
+        { 0, 0, 0, 1, 0, 0, 0, 0 }, /* C1            */
         { 1, 1, 0, 1, 1, 0, 0, 0 }, /* Last operator */
         { 0, 0, 1, 0, 0, 0, 0, 0 }, /* Last operator */
         { 1, 1, 1, 1, 1, 1, 1, 1 }  /* Out           */
@@ -546,16 +546,22 @@ static void OPM_EnvelopePhase2(opm_t *chip)
         break;
     }
     if (chip->ic)
+    {
         rate = 31;
+    }
     
     zr = rate == 0;
 
     ksv = chip->pg_kcode[slot] >> (chip->sl_ks[slot] ^ 3);
     if (chip->sl_ks[slot] == 0 && zr)
+    {
         ksv &= ~3;
+    }
     rate = rate * 2 + ksv;
     if (rate & 64)
+    {
         rate = 63;
+    }
 
     chip->eg_tl[2] = chip->eg_tl[1];
     chip->eg_tl[1] = chip->eg_tl[0];
@@ -1009,6 +1015,40 @@ static void OPM_Mixer(opm_t *chip)
     chip->mix[1] += chip->op_out[5] * chip->op_mixr;
 }
 
+static void OPM_Noise(opm_t *chip)
+{
+    uint8_t w1 = !chip->ic && !chip->noise_update;
+    uint8_t xr = ((chip->noise_lfsr >> 2) & 1) ^ chip->noise_temp;
+    uint8_t w2 = chip->noise_lfsr == 0 && chip->noise_temp == 0 && !xr;
+    uint8_t w3 = !chip->ic && !w1 && !w2;
+    uint8_t w4 = ((chip->noise_lfsr & 1) == 0 || !w1) && !w3;
+    if (!w1)
+    {
+        chip->noise_temp = (chip->noise_lfsr & 1) != 0;
+    }
+    chip->noise_lfsr >>= 1;
+    chip->noise_lfsr |= w4 << 16;
+}
+
+static void OPM_NoiseTimer(opm_t *chip)
+{
+    uint32_t timer = chip->noise_timer;
+
+    chip->noise_update = chip->noise_timer_of;
+
+    if (chip->cycles % 16 == 15)
+    {
+        timer++;
+        timer &= 31;
+    }
+    if (chip->ic || (chip->noise_timer_of && (chip->cycles % 16 == 15)))
+    {
+        timer = 0;
+    }
+
+    chip->noise_timer_of = timer == chip->noise_freq;
+}
+
 static void OPM_DoIO(opm_t *chip)
 {
     // Busy
@@ -1233,9 +1273,12 @@ void OPM_Clock(opm_t *chip, int32_t *output)
     OPM_PhaseCalcIncrement(chip);
     OPM_PhaseCalcFNumBlock(chip);
 
+    OPM_Noise(chip);
+
     OPM_KeyOn2(chip);
     OPM_DoRegWrite(chip);
     OPM_EnvelopeClock(chip);
+    OPM_NoiseTimer(chip);
     OPM_KeyOn1(chip);
     OPM_DoIO(chip);
     OPM_DoIC(chip);
@@ -1282,11 +1325,3 @@ uint8_t OPM_ReadCT2(opm_t *chip)
     }
     return chip->io_ct2;
 }
-
-
-int main(int argc, char *argv[])
-{
-    return 0;
-}
-
-

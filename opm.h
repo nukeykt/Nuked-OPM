@@ -120,6 +120,13 @@ typedef struct {
     int32_t mix2[2];
     int32_t mix_op;
 
+    // Noise
+    uint32_t noise_lfsr;
+    uint32_t noise_timer;
+    uint8_t noise_timer_of;
+    uint8_t noise_update;
+    uint8_t noise_temp;
+
     // Register set
     uint8_t mode_test[8];
     uint8_t mode_kon_operator[4];
