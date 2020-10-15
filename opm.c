@@ -341,8 +341,13 @@ static int32_t OPM_CalcKCode(int32_t kcf, int32_t lfo, int32_t lfo_sign, int32_t
     int32_t overflow1 = 0;
     int32_t overflow2 = 0;
     int32_t negoverflow = 0;
-    int32_t sum = (kcf & 8191) + (lfo&8191);
-    int32_t cr = ((kcf & 255) + (lfo & 255)) >> 8;
+    int32_t sum, cr;
+    if (!lfo_sign)
+    {
+        lfo = ~lfo;
+    }
+    sum = (kcf & 8191) + (lfo&8191) + (!lfo_sign);
+    cr = ((kcf & 255) + (lfo & 255)) >> 8;
     if (sum & (1 << 13))
     {
         overflow1 = 1;
@@ -408,7 +413,8 @@ static void OPM_PhaseCalcFNumBlock(opm_t *chip)
     uint32_t lfo = chip->lfo_pmd ? chip->lfo_pm_lock : 0;
     uint32_t pms = chip->ch_pms[channel];
     uint32_t dt = chip->sl_dt2[slot];
-    uint32_t kcode = OPM_CalcKCode(kcf, lfo & 127, (lfo & 0x80) ? 0 : 1, dt);
+    uint32_t lfo_pm = OPM_LFOApplyPMS(lfo & 127, pms);
+    uint32_t kcode = OPM_CalcKCode(kcf, lfo_pm, (lfo & 0x80) ? 0 : 1, dt);
     uint32_t fnum = OPM_KCToFNum(kcode);
     uint32_t kcode_h = kcode >> 8;
     chip->pg_fnum[slot] = fnum;
@@ -1269,20 +1275,21 @@ static void OPM_DoLFO1(opm_t *chip)
     noise = chip->lfo_clock_lock && (chip->noise_lfsr & 1) != 0;
     lfo_bit = sum & 1;
     lfo_bit |= (chip->lfo_wave == 3) && noise;
-    carry = sum >> 1;
+    chip->lfo_val_carry = sum >> 1;
+    chip->lfo_val <<= 1;
+    chip->lfo_val |= lfo_bit;
     
 
     if (chip->cycles % 16 == 15 && (chip->lfo_bit_counter & 7) == 7)
     {
         if (ampm_sel)
         {
-            chip->lfo_pm_lock2 = (chip->lfo_out2 >> 8) & 255;
+            chip->lfo_pm_lock2 = (chip->lfo_out2_b >> 8) & 255;
             chip->lfo_pm_lock2 ^= lfo_pm_sign << 7;
-            chip->lfo_pm_lock2 ^= 255;
         }
         else
         {
-            chip->lfo_am_lock = (chip->lfo_out2 >> 8) & 255;
+            chip->lfo_am_lock = (chip->lfo_out2_b >> 8) & 255;
         }
     }
 
