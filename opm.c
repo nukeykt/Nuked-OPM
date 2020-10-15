@@ -754,14 +754,22 @@ static void OPM_EnvelopePhase5(opm_t *chip)
     {
         chip->eg_out[0] = 1023;
     }
+
+    if (chip->eg_test)
+    {
+        chip->eg_out[0] = 0;
+    }
+
+    chip->eg_test = chip->mode_test[5];
 }
 
 static void OPM_EnvelopePhase6(opm_t *chip)
 {
+    uint32_t slot = (chip->cycles + 28) % 32;
     chip->eg_serial_bit = (chip->eg_serial >> 9) & 1;
     if (chip->cycles == 3)
     {
-        chip->eg_serial = chip->eg_out[0];
+        chip->eg_serial = chip->eg_out[0] ^ 1023;
     }
     else
     {
@@ -953,7 +961,7 @@ static void OPM_OperatorPhase13(opm_t* chip)
 static void OPM_OperatorPhase14(opm_t* chip)
 {
     uint32_t slot = (chip->cycles + 19) % 32;
-    chip->op_out[5] = chip->op_out[4];
+    chip->op_mix = chip->op_out[5] = chip->op_out[4];
     chip->op_fbupdate = (chip->op_counter == 0);
     chip->op_c1update = (chip->op_counter == 2);
     chip->op_fbshift <<= 1;
@@ -1031,8 +1039,8 @@ static void OPM_OperatorCounter(opm_t *chip)
 static void OPM_Mixer(opm_t *chip)
 {
     uint32_t slot = (chip->cycles + 18) % 32;
-    chip->mix[0] += chip->op_out[5] * chip->op_mixl;
-    chip->mix[1] += chip->op_out[5] * chip->op_mixr;
+    chip->mix[0] += chip->op_mix * chip->op_mixl;
+    chip->mix[1] += chip->op_mix * chip->op_mixr;
 }
 
 static void OPM_Noise(opm_t *chip)
@@ -1347,6 +1355,45 @@ static void OPM_DoLFO2(opm_t *chip)
     chip->lfo_test = chip->mode_test[2];
 }
 
+static void OPM_CSM(opm_t *chip)
+{
+    chip->kon_csm = chip->kon_csm_lock;
+    if (chip->cycles == 1)
+    {
+        chip->kon_csm_lock = chip->timer_a_do_load && chip->mode_csm;
+    }
+}
+
+static void OPM_NoiseChannel(opm_t *chip)
+{
+    chip->nc_active |= chip->eg_serial_bit & 1;
+    if (chip->cycles == 13)
+    {
+        chip->nc_active = 0;
+    }
+    chip->nc_out <<= 1;
+    chip->nc_out |= chip->nc_sign ^ chip->eg_serial_bit;
+    chip->nc_sign = !chip->nc_sign_lock;
+    if (chip->cycles == 12)
+    {
+        chip->nc_active_lock = chip->nc_active;
+        chip->nc_sign_lock2 = chip->nc_active_lock && !chip->nc_sign_lock;
+        chip->nc_sign_lock = (chip->noise_lfsr & 1);
+
+        if (chip->noise_en)
+        {
+            if (chip->nc_sign_lock2)
+            {
+                chip->op_mix = ((chip->nc_out & ~1) << 2) | -4089;
+            }
+            else
+            {
+                chip->op_mix = ((chip->nc_out & ~1) << 2);
+            }
+        }
+    }
+}
+
 static void OPM_DoIO(opm_t *chip)
 {
     // Busy
@@ -1601,6 +1648,8 @@ void OPM_Clock(opm_t *chip, int32_t *output)
     OPM_DoTimerA2(chip);
     OPM_DoTimerB2(chip);
     OPM_DoLFO2(chip);
+    OPM_CSM(chip);
+    OPM_NoiseChannel(chip);
 
     // temp
     output[0] = chip->mix[0];

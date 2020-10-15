@@ -104,6 +104,7 @@ typedef struct {
     uint8_t eg_timerbstop;
     uint32_t eg_serial;
     uint8_t eg_serial_bit;
+    uint8_t eg_test;
     
 
     // Phase Gen
@@ -215,7 +216,12 @@ typedef struct {
     uint8_t timer_reseta, timer_resetb;
     uint8_t mode_csm;
 
-    uint8_t kon_csm;
+    uint8_t nc_active, nc_active_lock, nc_sign, nc_sign_lock, nc_sign_lock2;
+    uint8_t nc_bit;
+    uint16_t nc_out;
+    int16_t op_mix;
+
+    uint8_t kon_csm, kon_csm_lock;
     uint8_t kon_do;
     uint8_t kon_chanmatch;
     uint8_t kon[32];
