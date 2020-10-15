@@ -115,10 +115,6 @@ static const uint32_t eg_stephi[4][4] = {
     { 1, 1, 1, 0 }
 };
 
-static const uint32_t eg_am_shift[4] = {
-    8, 3, 1, 0
-};
-
 /* Phase generator */
 static const uint32_t pg_detune[8] = { 16, 17, 19, 20, 22, 24, 27, 29 };
 
@@ -284,26 +280,22 @@ static int32_t OPM_KCToFNum(int32_t kcode)
 
 static int32_t OPM_LFOApplyPMS(int32_t lfo, int32_t pms)
 {
-    int32_t b0, b1, b2, t, out;
-    int32_t top = ((lfo >> 4) & 7) ^ 7;
+    int32_t t, out;
+    int32_t top = (lfo >> 4) & 7;
     if (pms != 7)
     {
         top >>= 1;
-        top |= 4;
     }
+    t = (top & 6) == 6 || ((top & 3) == 3 && pms >= 6);
 
-    b0 = (top >> 0) & 1;
-    b1 = (top >> 1) & 1;
-    b2 = (top >> 2) & 1;
-    t = (b1 || b2) && (b0 || b1 || pms < 6);
-
-    out = b0 + b1 * 2 + b2 * 5 + 6 + t;
-    out = out * 2 + (((lfo >> 4) & 1) ^ 1);
+    out = top + ((top >> 2) & 1) + t;
+    out = out * 2 + ((lfo >> 4) & 1);
 
     if (pms == 7)
+    {
         out >>= 1;
+    }
     out &= 15;
-    out ^= 15;
     out = (lfo & 15) + out * 16;
     switch (pms)
     {
@@ -592,7 +584,22 @@ static void OPM_EnvelopePhase2(opm_t *chip)
     chip->eg_ratemax[1] = chip->eg_ratemax[0];
     chip->eg_ratemax[0] = (rate >> 1) == 31;
     ams = chip->sl_am_e[slot] ? chip->ch_ams[chan] : 0;
-    chip->eg_am = chip->lfo_am_lock >> eg_am_shift[ams];
+    switch (ams)
+    {
+    default:
+    case 0:
+        chip->eg_am = 0;
+        break;
+    case 1:
+        chip->eg_am = chip->lfo_am_lock << 0;
+        break;
+    case 2:
+        chip->eg_am = chip->lfo_am_lock << 1;
+        break;
+    case 3:
+        chip->eg_am = chip->lfo_am_lock << 2;
+        break;
+    }
 }
 
 static void OPM_EnvelopePhase3(opm_t *chip)
