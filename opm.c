@@ -1219,7 +1219,7 @@ static void OPM_DoLFO1(opm_t *chip)
     chip->lfo_counter2 = counter2 & 32767;
     chip->lfo_counter2_load = chip->lfo_frq_update || of_old;
     chip->lfo_frq_update = 0;
-    if (chip->cycles == 12)
+    if ((chip->cycles % 16) == 12)
     {
         chip->lfo_counter1++;
     }
