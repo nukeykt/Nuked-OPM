@@ -48,7 +48,6 @@ typedef struct {
     // LFO
     uint8_t lfo_am_lock;
     uint8_t lfo_pm_lock;
-    uint8_t lfo_pm_lock2;
     uint8_t lfo_counter1;
     uint8_t lfo_counter1_of1;
     uint8_t lfo_counter1_of2;

@@ -285,7 +285,7 @@ static int32_t OPM_KCToFNum(int32_t kcode)
 static int32_t OPM_LFOApplyPMS(int32_t lfo, int32_t pms)
 {
     int32_t b0, b1, b2, t, out;
-    int32_t top = (lfo >> 4) & 7;
+    int32_t top = ((lfo >> 4) & 7) ^ 7;
     if (pms != 7)
     {
         top >>= 1;
@@ -298,11 +298,12 @@ static int32_t OPM_LFOApplyPMS(int32_t lfo, int32_t pms)
     t = (b1 || b2) && (b0 || b1 || pms < 6);
 
     out = b0 + b1 * 2 + b2 * 5 + 6 + t;
-    out = out * 2 + ((lfo >> 4) & 1);
+    out = out * 2 + (((lfo >> 4) & 1) ^ 1);
 
     if (pms == 7)
         out >>= 1;
     out &= 15;
+    out ^= 15;
     out = (lfo & 15) + out * 16;
     switch (pms)
     {
@@ -347,7 +348,7 @@ static int32_t OPM_CalcKCode(int32_t kcf, int32_t lfo, int32_t lfo_sign, int32_t
         lfo = ~lfo;
     }
     sum = (kcf & 8191) + (lfo&8191) + (!lfo_sign);
-    cr = ((kcf & 255) + (lfo & 255)) >> 8;
+    cr = ((kcf & 255) + (lfo & 255) + (!lfo_sign)) >> 8;
     if (sum & (1 << 13))
     {
         overflow1 = 1;
@@ -413,8 +414,8 @@ static void OPM_PhaseCalcFNumBlock(opm_t *chip)
     uint32_t lfo = chip->lfo_pmd ? chip->lfo_pm_lock : 0;
     uint32_t pms = chip->ch_pms[channel];
     uint32_t dt = chip->sl_dt2[slot];
-    uint32_t lfo_pm = OPM_LFOApplyPMS(lfo & 127, pms);
-    uint32_t kcode = OPM_CalcKCode(kcf, lfo_pm, (lfo & 0x80) ? 0 : 1, dt);
+    int32_t lfo_pm = OPM_LFOApplyPMS(lfo & 127, pms);
+    uint32_t kcode = OPM_CalcKCode(kcf, lfo_pm, (lfo & 0x80) != 0 && pms != 0 ? 0 : 1, dt);
     uint32_t fnum = OPM_KCToFNum(kcode);
     uint32_t kcode_h = kcode >> 8;
     chip->pg_fnum[slot] = fnum;
@@ -1031,15 +1032,16 @@ static void OPM_Noise(opm_t *chip)
 {
     uint8_t w1 = !chip->ic && !chip->noise_update;
     uint8_t xr = ((chip->noise_lfsr >> 2) & 1) ^ chip->noise_temp;
-    uint8_t w2 = chip->noise_lfsr == 0 && chip->noise_temp == 0 && !xr;
+    uint8_t w2t = (chip->noise_lfsr & 0xffff) == 0xffff && chip->noise_temp == 0;
+    uint8_t w2 = !w2t && !xr;
     uint8_t w3 = !chip->ic && !w1 && !w2;
     uint8_t w4 = ((chip->noise_lfsr & 1) == 0 || !w1) && !w3;
     if (!w1)
     {
-        chip->noise_temp = (chip->noise_lfsr & 1) != 0;
+        chip->noise_temp = (chip->noise_lfsr & 1) == 0;
     }
     chip->noise_lfsr >>= 1;
-    chip->noise_lfsr |= w4 << 16;
+    chip->noise_lfsr |= w4 << 15;
 }
 
 static void OPM_NoiseTimer(opm_t *chip)
@@ -1059,6 +1061,7 @@ static void OPM_NoiseTimer(opm_t *chip)
     }
 
     chip->noise_timer_of = timer == chip->noise_freq;
+    chip->noise_timer = timer;
 }
 
 static void OPM_DoTimerA(opm_t *chip)
@@ -1157,25 +1160,25 @@ static void OPM_DoLFOMult(opm_t *chip)
     switch (chip->lfo_bit_counter & 7)
     {
     case 0:
-        bit = (dp & 1) != 0 && (chip->lfo_out1 & 64) == 0;
+        bit = (dp & 64) != 0 && (chip->lfo_out1 & 64) == 0;
         break;
     case 1:
-        bit = (dp & 2) != 0 && (chip->lfo_out1 & 32) == 0;
+        bit = (dp & 32) != 0 && (chip->lfo_out1 & 32) == 0;
         break;
     case 2:
-        bit = (dp & 4) != 0 && (chip->lfo_out1 & 16) == 0;
+        bit = (dp & 16) != 0 && (chip->lfo_out1 & 16) == 0;
         break;
     case 3:
         bit = (dp & 8) != 0 && (chip->lfo_out1 & 8) == 0;
         break;
     case 4:
-        bit = (dp & 16) != 0 && (chip->lfo_out1 & 4) == 0;
+        bit = (dp & 4) != 0 && (chip->lfo_out1 & 4) == 0;
         break;
     case 5:
-        bit = (dp & 32) != 0 && (chip->lfo_out1 & 2) == 0;
+        bit = (dp & 2) != 0 && (chip->lfo_out1 & 2) == 0;
         break;
     case 6:
-        bit = (dp & 64) != 0 && (chip->lfo_out1 & 1) == 0;
+        bit = (dp & 1) != 0 && (chip->lfo_out1 & 1) == 0;
         break;
     }
 
@@ -1202,7 +1205,6 @@ static void OPM_DoLFO1(opm_t *chip)
     uint8_t lfo_bit, noise, sum, carry, w[20];
     uint8_t lfo_pm_sign;
     uint8_t ampm_sel = (chip->lfo_bit_counter & 8) != 0;
-    uint8_t dp = ampm_sel ? chip->lfo_pmd : chip->lfo_amd;
     //counter2 += chip->lfo_counter2_clock;
     counter2 += (chip->lfo_counter1_of1 & 2) != 0 || chip->mode_test[3];
     chip->lfo_counter2_of = (counter2 >> 15) & 1;
@@ -1284,16 +1286,14 @@ static void OPM_DoLFO1(opm_t *chip)
     {
         if (ampm_sel)
         {
-            chip->lfo_pm_lock2 = (chip->lfo_out2_b >> 8) & 255;
-            chip->lfo_pm_lock2 ^= lfo_pm_sign << 7;
+            chip->lfo_pm_lock = (chip->lfo_out2_b >> 8) & 255;
+            chip->lfo_pm_lock ^= lfo_pm_sign << 7;
         }
         else
         {
             chip->lfo_am_lock = (chip->lfo_out2_b >> 8) & 255;
         }
     }
-
-    chip->lfo_pm_lock = chip->lfo_pmd ? chip->lfo_pm_lock2 : 0;
 
     if ((chip->cycles & 15) == 14)
     {
@@ -1379,7 +1379,7 @@ static void OPM_DoRegWrite(opm_t *chip)
                 chip->ch_kf[channel] = chip->reg_data >> 2;
                 break;
             case 0x18: // PMS, AMS
-                chip->ch_pms[channel] = (chip->reg_data >> 4) * 0x07;
+                chip->ch_pms[channel] = (chip->reg_data >> 4) & 0x07;
                 chip->ch_ams[channel] = chip->reg_data & 0x03;
                 break;
             default:
