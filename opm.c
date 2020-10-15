@@ -1075,7 +1075,7 @@ static void OPM_NoiseTimer(opm_t *chip)
         timer = 0;
     }
 
-    chip->noise_timer_of = timer == chip->noise_freq;
+    chip->noise_timer_of = chip->noise_timer == (chip->noise_freq ^ 31);
     chip->noise_timer = timer;
 }
 
