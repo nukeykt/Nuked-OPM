@@ -48,6 +48,32 @@ typedef struct {
     // LFO
     uint8_t lfo_am_lock;
     uint8_t lfo_pm_lock;
+    uint8_t lfo_pm_lock2;
+    uint8_t lfo_counter1;
+    uint8_t lfo_counter1_of1;
+    uint8_t lfo_counter1_of2;
+    // uint8_t lfo_counter2_clock;
+    uint16_t lfo_counter2;
+    uint8_t lfo_counter2_load;
+    uint8_t lfo_counter2_of;
+    uint8_t lfo_counter2_of_lock;
+    uint8_t lfo_counter2_of_lock2;
+    uint8_t lfo_counter3_clock;
+    uint16_t lfo_counter3;
+    uint8_t lfo_counter3_step;
+    uint8_t lfo_frq_update;
+    uint8_t lfo_clock;
+    uint8_t lfo_clock_lock;
+    uint8_t lfo_test;
+    uint32_t lfo_val;
+    uint8_t lfo_val_carry;
+    uint32_t lfo_out1;
+    uint32_t lfo_out2;
+    uint32_t lfo_out2_b;
+    uint8_t lfo_mult_carry;
+    uint8_t lfo_trig_sign;
+    uint8_t lfo_saw_sign;
+    uint8_t lfo_bit_counter;
 
     // Env Gen
     uint8_t eg_state[32];
@@ -165,7 +191,7 @@ typedef struct {
     uint8_t timer_a_temp;
     uint8_t timer_a_do_reset, timer_a_do_load;
     uint8_t timer_a_inc;
-    uint16_t timer_a_val, timer_a_val_temp;
+    uint16_t timer_a_val;
     uint8_t timer_a_of;
     uint8_t timer_a_load;
     uint8_t timer_a_status;
@@ -173,7 +199,7 @@ typedef struct {
     uint8_t timer_b_sub;
     uint8_t timer_b_sub_of;
     uint8_t timer_b_inc;
-    uint16_t timer_b_val, timer_b_val_temp;
+    uint16_t timer_b_val;
     uint8_t timer_b_of;
     uint8_t timer_b_do_reset, timer_b_do_load;
     uint8_t timer_b_temp;

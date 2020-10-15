@@ -232,6 +232,12 @@ static const uint32_t fm_algorithm[4][6][8] = {
     }
 };
 
+static uint16_t lfo_counter2_table[] = {
+    0x0000, 0x4000, 0x6000, 0x7000,
+    0x7800, 0x7c00, 0x7e00, 0x7f00,
+    0x7f80, 0x7fc0, 0x7fe0, 0x7ff0,
+    0x7ff8, 0x7ffc, 0x7ffe, 0x7fff
+};
 
 static int32_t OPM_KCToFNum(int32_t kcode)
 {
@@ -1052,6 +1058,8 @@ static void OPM_NoiseTimer(opm_t *chip)
 static void OPM_DoTimerA(opm_t *chip)
 {
     uint16_t value = chip->timer_a_val;
+    value += chip->timer_a_inc;
+    chip->timer_a_of = (value >> 10) & 1;
     if (chip->timer_a_do_reset)
     {
         value = 0;
@@ -1061,8 +1069,7 @@ static void OPM_DoTimerA(opm_t *chip)
         value = chip->timer_a_reg;
     }
 
-    chip->timer_a_of = (chip->timer_a_val_temp >> 10);
-    chip->timer_a_val_temp = value + chip->timer_a_inc;
+    chip->timer_a_val = value & 1023;
 }
 
 static void OPM_DoTimerA2(opm_t* chip)
@@ -1071,10 +1078,10 @@ static void OPM_DoTimerA2(opm_t* chip)
     {
         chip->timer_a_load = chip->timer_loada;
     }
-    chip->timer_a_inc = chip->mode_test[2] || (!chip->timer_a_load && chip->cycles == 0);
-    chip->timer_a_do_load = chip->timer_a_of || (!chip->timer_a_load && chip->timer_a_temp);
+    chip->timer_a_inc = chip->mode_test[2] || (chip->timer_a_load && chip->cycles == 0);
+    chip->timer_a_do_load = chip->timer_a_of || (chip->timer_a_load && chip->timer_a_temp);
     chip->timer_a_do_reset = chip->timer_a_temp;
-    chip->timer_a_temp = chip->timer_a_load;
+    chip->timer_a_temp = !chip->timer_a_load;
     if (chip->timer_reseta)
     {
         chip->timer_a_status = 0;
@@ -1089,6 +1096,8 @@ static void OPM_DoTimerA2(opm_t* chip)
 static void OPM_DoTimerB(opm_t *chip)
 {
     uint16_t value = chip->timer_b_val;
+    value += chip->timer_b_inc;
+    chip->timer_b_of = (value >> 8) & 1;
     if (chip->timer_b_do_reset)
     {
         value = 0;
@@ -1098,8 +1107,7 @@ static void OPM_DoTimerB(opm_t *chip)
         value = chip->timer_b_reg;
     }
 
-    chip->timer_b_of = (chip->timer_b_val_temp >> 8) & 1;
-    chip->timer_b_val_temp = value + chip->timer_b_inc;
+    chip->timer_b_val = value & 255;
 
     if (chip->cycles == 0)
     {
@@ -1116,10 +1124,10 @@ static void OPM_DoTimerB(opm_t *chip)
 
 static void OPM_DoTimerB2(opm_t* chip)
 {
-    chip->timer_b_inc = chip->mode_test[2] || (!chip->timer_loadb && chip->timer_b_sub_of);
-    chip->timer_b_do_load = chip->timer_b_of || (!chip->timer_loadb && chip->timer_b_temp);
+    chip->timer_b_inc = chip->mode_test[2] || (chip->timer_loadb && chip->timer_b_sub_of);
+    chip->timer_b_do_load = chip->timer_b_of || (chip->timer_loadb && chip->timer_b_temp);
     chip->timer_b_do_reset = chip->timer_b_temp;
-    chip->timer_b_temp = chip->timer_loadb;
+    chip->timer_b_temp = !chip->timer_loadb;
     if (chip->timer_resetb)
     {
         chip->timer_b_status = 0;
@@ -1129,6 +1137,200 @@ static void OPM_DoTimerB2(opm_t* chip)
         chip->timer_b_status |= chip->timer_irqb && chip->timer_b_of;
     }
     chip->timer_resetb = 0;
+}
+
+static void OPM_DoLFOMult(opm_t *chip)
+{
+    uint8_t ampm_sel = (chip->lfo_bit_counter & 8) != 0;
+    uint8_t dp = ampm_sel ? chip->lfo_pmd : chip->lfo_amd;
+    uint8_t bit = 0, b1, b2;
+    uint8_t sum;
+
+    chip->lfo_out2_b = chip->lfo_out2;
+
+    switch (chip->lfo_bit_counter & 7)
+    {
+    case 0:
+        bit = (dp & 1) != 0 && (chip->lfo_out1 & 64) == 0;
+        break;
+    case 1:
+        bit = (dp & 2) != 0 && (chip->lfo_out1 & 32) == 0;
+        break;
+    case 2:
+        bit = (dp & 4) != 0 && (chip->lfo_out1 & 16) == 0;
+        break;
+    case 3:
+        bit = (dp & 8) != 0 && (chip->lfo_out1 & 8) == 0;
+        break;
+    case 4:
+        bit = (dp & 16) != 0 && (chip->lfo_out1 & 4) == 0;
+        break;
+    case 5:
+        bit = (dp & 32) != 0 && (chip->lfo_out1 & 2) == 0;
+        break;
+    case 6:
+        bit = (dp & 64) != 0 && (chip->lfo_out1 & 1) == 0;
+        break;
+    }
+
+    b1 = (chip->lfo_out2 & 1) != 0;
+    if ((chip->lfo_bit_counter & 7) == 0)
+    {
+        b1 = 0;
+    }
+    b2 = chip->lfo_mult_carry;
+    if (chip->cycles % 16 == 15)
+    {
+        b2 = 0;
+    }
+    sum = bit + b1 + b2;
+    chip->lfo_out2 >>= 1;
+    chip->lfo_out2 |= (sum & 1) << 15;
+    chip->lfo_mult_carry = sum >> 1;
+}
+
+static void OPM_DoLFO1(opm_t *chip)
+{
+    uint16_t counter2 = chip->lfo_counter2;
+    uint8_t of_old = chip->lfo_counter2_of;
+    uint8_t lfo_bit, noise, sum, carry, w[20];
+    uint8_t lfo_pm_sign;
+    uint8_t ampm_sel = (chip->lfo_bit_counter & 8) != 0;
+    uint8_t dp = ampm_sel ? chip->lfo_pmd : chip->lfo_amd;
+    //counter2 += chip->lfo_counter2_clock;
+    counter2 += (chip->lfo_counter1_of1 & 2) != 0 || chip->mode_test[3];
+    chip->lfo_counter2_of = (counter2 >> 15) & 1;
+    if (chip->ic)
+    {
+        counter2 = 0;
+    }
+    if (chip->lfo_counter2_load)
+    {
+        counter2 = lfo_counter2_table[chip->lfo_freq_hi];
+    }
+    chip->lfo_counter2 = counter2 & 32767;
+    chip->lfo_counter2_load = chip->lfo_frq_update || of_old;
+    chip->lfo_frq_update = 0;
+    if (chip->cycles == 12)
+    {
+        chip->lfo_counter1++;
+    }
+    chip->lfo_counter1_of1 <<= 1;
+    chip->lfo_counter1_of1 |= (chip->lfo_counter1 >> 4) & 1;
+    chip->lfo_counter1 &= 15;
+    if (chip->ic)
+    {
+        chip->lfo_counter1 = 0;
+    }
+
+    if ((chip->cycles & 15) == 5)
+    {
+        chip->lfo_counter2_of_lock2 = chip->lfo_counter2_of_lock;
+    }
+
+    chip->lfo_counter3 += chip->lfo_counter3_clock;
+    if (chip->ic)
+    {
+        chip->lfo_counter3 = 0;
+    }
+
+    chip->lfo_counter3_clock = (chip->cycles & 15) == 13 && chip->lfo_counter2_of_lock2;
+
+    if ((chip->cycles & 15) == 15)
+    {
+        chip->lfo_trig_sign = (chip->lfo_val & 0x80) != 0;
+        chip->lfo_saw_sign = (chip->lfo_val & 0x100) != 0;
+    }
+
+    lfo_pm_sign = chip->lfo_wave == 2 ? chip->lfo_trig_sign : chip->lfo_saw_sign;
+
+    w[5] = ampm_sel ? chip->lfo_saw_sign : (chip->lfo_wave != 2 || chip->lfo_trig_sign);
+
+    w[1] = !chip->lfo_clock || chip->lfo_wave == 3 || (chip->cycles & 15) != 15;
+    w[2] = chip->lfo_wave == 2 && !w[1];
+    w[4] = chip->lfo_clock_lock && chip->lfo_wave == 3;
+    w[3] = !chip->ic && !chip->mode_test[1] && !w[4] && (chip->lfo_val & 0x8000) != 0;
+
+    w[7] = ((chip->cycles + 1) % 16) < 8;
+
+    w[6] = w[5] ^ w[3];
+    
+    w[9] = ampm_sel ? ((chip->cycles % 16) == 6) : !chip->lfo_saw_sign;
+
+    w[8] = chip->lfo_wave == 1 ? w[9] : w[6];
+
+    w[8] &= w[7];
+
+    chip->lfo_out1 <<= 1;
+    chip->lfo_out1 |= !w[8];
+
+    carry = !w[1] || ((chip->cycles & 15) != 15 && chip->lfo_val_carry != 0 && chip->lfo_wave != 3);
+    sum = carry + w[2] + w[3];
+    noise = chip->lfo_clock_lock && (chip->noise_lfsr & 1) != 0;
+    lfo_bit = sum & 1;
+    lfo_bit |= (chip->lfo_wave == 3) && noise;
+    carry = sum >> 1;
+    
+
+    if (chip->cycles % 16 == 15 && (chip->lfo_bit_counter & 7) == 7)
+    {
+        if (ampm_sel)
+        {
+            chip->lfo_pm_lock2 = (chip->lfo_out2 >> 8) & 255;
+            chip->lfo_pm_lock2 ^= lfo_pm_sign << 7;
+            chip->lfo_pm_lock2 ^= 255;
+        }
+        else
+        {
+            chip->lfo_am_lock = (chip->lfo_out2 >> 8) & 255;
+        }
+    }
+
+    chip->lfo_pm_lock = chip->lfo_pmd ? chip->lfo_pm_lock2 : 0;
+
+    if ((chip->cycles & 15) == 14)
+    {
+        chip->lfo_bit_counter++;
+    }
+    if ((chip->cycles & 15) != 12 && chip->lfo_counter1_of2)
+    {
+        chip->lfo_bit_counter = 0;
+    }
+    chip->lfo_counter1_of2 = chip->lfo_counter1 == 2;
+}
+
+static void OPM_DoLFO2(opm_t *chip)
+{
+    uint8_t c3_step = 0;
+    //chip->lfo_counter2_clock = (chip->lfo_counter1_of1 & 2) != 0 || chip->mode_test[3];
+
+    chip->lfo_clock = (chip->lfo_counter2_of || chip->lfo_test || chip->lfo_counter3_step);
+    if ((chip->cycles & 15) == 14)
+    {
+        chip->lfo_counter2_of_lock = chip->lfo_counter2_of;
+        chip->lfo_clock_lock = chip->lfo_clock;
+    }
+    chip->lfo_counter3_step = 0;
+    if (chip->lfo_counter3_clock)
+    {
+        if ((chip->lfo_counter3 & 1) == 0)
+        {
+            chip->lfo_counter3_step = (chip->lfo_freq_lo & 8) != 0;
+        }
+        else if ((chip->lfo_counter3 & 2) == 0)
+        {
+            chip->lfo_counter3_step = (chip->lfo_freq_lo & 4) != 0;
+        }
+        else if ((chip->lfo_counter3 & 4) == 0)
+        {
+            chip->lfo_counter3_step = (chip->lfo_freq_lo & 2) != 0;
+        }
+        else if ((chip->lfo_counter3 & 8) == 0)
+        {
+            chip->lfo_counter3_step = (chip->lfo_freq_lo & 1) != 0;
+        }
+    }
+    chip->lfo_test = chip->mode_test[2];
 }
 
 static void OPM_DoIO(opm_t *chip)
@@ -1256,7 +1458,7 @@ static void OPM_DoRegWrite(opm_t *chip)
         case 0x18:
             chip->lfo_freq_hi = chip->write_data >> 4;
             chip->lfo_freq_lo = chip->write_data & 0x0f;
-            // TODO: chip->lfo_timer2_reset |= 2;
+            chip->lfo_frq_update = 1;
             break;
         case 0x19:
             if (chip->write_data & 0x80)
@@ -1370,9 +1572,11 @@ void OPM_Clock(opm_t *chip, int32_t *output)
     OPM_PhaseCalcIncrement(chip);
     OPM_PhaseCalcFNumBlock(chip);
 
-    OPM_Noise(chip);
     OPM_DoTimerA(chip);
     OPM_DoTimerB(chip);
+    OPM_DoLFOMult(chip);
+    OPM_DoLFO1(chip);
+    OPM_Noise(chip);
     OPM_KeyOn2(chip);
     OPM_DoRegWrite(chip);
     OPM_EnvelopeClock(chip);
@@ -1382,6 +1586,7 @@ void OPM_Clock(opm_t *chip, int32_t *output)
     OPM_DoIC(chip);
     OPM_DoTimerA2(chip);
     OPM_DoTimerB2(chip);
+    OPM_DoLFO2(chip);
 
     // temp
     output[0] = chip->mix[0];
