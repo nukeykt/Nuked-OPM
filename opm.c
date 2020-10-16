@@ -631,7 +631,7 @@ static void OPM_EnvelopePhase4(opm_t *chip)
                 inc = 4;
             }
         }
-        else
+        else if (!chip->eg_zr[1])
         {
             switch (chip->eg_shift)
             {
