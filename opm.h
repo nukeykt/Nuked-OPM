@@ -145,6 +145,20 @@ typedef struct {
     int32_t mix[2];
     int32_t mix2[2];
     int32_t mix_op;
+    uint32_t mix_serial[2];
+    uint32_t mix_bits;
+    uint32_t mix_top_bits_lock;
+    uint8_t mix_sign_lock;
+    uint8_t mix_sign_lock2;
+    uint8_t mix_exp_lock;
+    uint8_t mix_clamp_low[2];
+    uint8_t mix_clamp_high[2];
+    uint8_t mix_out_bit;
+
+    // Output
+    uint8_t smp_so;
+    uint8_t smp_sh1;
+    uint8_t smp_sh2;
 
     // Noise
     uint32_t noise_lfsr;
@@ -227,6 +241,11 @@ typedef struct {
     uint8_t kon[32];
     uint8_t kon2[32];
     uint8_t mode_kon[32];
+
+    // DAC
+    uint8_t dac_osh1, dac_osh2;
+    uint16_t dac_bits;
+    int32_t dac_output[2];
 } opm_t;
 
 #endif
