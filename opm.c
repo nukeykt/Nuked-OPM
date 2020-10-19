@@ -21,7 +21,7 @@
  *      siliconpr0n.org(digshadow, John McMaster):
  *          YM2151 and other FM chip decaps and die shots.
  *
- * version: 0.0
+ * version: 0.9 beta
  */
 #include <stdio.h>
 #include <string.h>
@@ -1323,7 +1323,7 @@ static void OPM_DoTimerA2(opm_t *chip)
     chip->timer_a_do_load = chip->timer_a_of || (chip->timer_a_load && chip->timer_a_temp);
     chip->timer_a_do_reset = chip->timer_a_temp;
     chip->timer_a_temp = !chip->timer_a_load;
-    if (chip->timer_reseta)
+    if (chip->timer_reseta || chip->ic)
     {
         chip->timer_a_status = 0;
     }
@@ -1369,7 +1369,7 @@ static void OPM_DoTimerB2(opm_t *chip)
     chip->timer_b_do_load = chip->timer_b_of || (chip->timer_loadb && chip->timer_b_temp);
     chip->timer_b_do_reset = chip->timer_b_temp;
     chip->timer_b_temp = !chip->timer_loadb;
-    if (chip->timer_resetb)
+    if (chip->timer_resetb || chip->ic)
     {
         chip->timer_b_status = 0;
     }
@@ -1439,7 +1439,7 @@ static void OPM_DoLFO1(opm_t *chip)
 {
     uint16_t counter2 = chip->lfo_counter2;
     uint8_t of_old = chip->lfo_counter2_of;
-    uint8_t lfo_bit, noise, sum, carry, w[20];
+    uint8_t lfo_bit, noise, sum, carry, w[10];
     uint8_t lfo_pm_sign;
     uint8_t ampm_sel = (chip->lfo_bit_counter & 8) != 0;
     counter2 += (chip->lfo_counter1_of1 & 2) != 0 || chip->mode_test[3];
@@ -1619,8 +1619,12 @@ static void OPM_DoIO(opm_t *chip)
 {
     // Busy
     chip->write_busy_cnt += chip->write_busy;
-    chip->write_busy = (!(chip->write_busy_cnt >> 5) && chip->write_busy) | chip->write_d_en;
+    chip->write_busy = (!(chip->write_busy_cnt >> 5) && chip->write_busy && !chip->ic) | chip->write_d_en;
     chip->write_busy_cnt &= 0x1f;
+    if (chip->ic)
+    {
+        chip->write_busy_cnt = 0;
+    }
     // Write signal check
     chip->write_a_en = chip->write_a;
     chip->write_d_en = chip->write_d;
@@ -1783,7 +1787,6 @@ static void OPM_DoRegWrite(opm_t *chip)
 
 static void OPM_DoIC(opm_t *chip)
 {
-    // TODO:
     uint32_t channel = chip->cycles % 8;
     uint32_t slot = chip->cycles;
     if (chip->ic)
@@ -1815,6 +1818,36 @@ static void OPM_DoIC(opm_t *chip)
         chip->timer_loada = 0;
         chip->timer_loadb = 0;
         chip->mode_csm = 0;
+
+        chip->mode_test[0] = 0;
+        chip->mode_test[1] = 0;
+        chip->mode_test[2] = 0;
+        chip->mode_test[3] = 0;
+        chip->mode_test[4] = 0;
+        chip->mode_test[5] = 0;
+        chip->mode_test[6] = 0;
+        chip->mode_test[7] = 0;
+        chip->noise_en = 0;
+        chip->noise_freq = 0;
+
+        chip->mode_kon_channel = 0;
+        chip->mode_kon_operator[0] = 0;
+        chip->mode_kon_operator[1] = 0;
+        chip->mode_kon_operator[2] = 0;
+        chip->mode_kon_operator[3] = 0;
+        chip->mode_kon[(slot + 8) % 32] = 0;
+
+        chip->lfo_pmd = 0;
+        chip->lfo_amd = 0;
+        chip->lfo_wave = 0;
+        chip->lfo_freq_hi = 0;
+        chip->lfo_freq_lo = 0;
+
+        chip->io_ct1 = 0;
+        chip->io_ct2 = 0;
+
+        chip->reg_address = 0;
+        chip->reg_data = 0;
     }
     chip->ic2 = chip->ic;
 }
@@ -1867,7 +1900,6 @@ void OPM_Clock(opm_t *chip, int32_t *output, uint8_t *sh1, uint8_t *sh2, uint8_t
     OPM_NoiseTimer(chip);
     OPM_KeyOn1(chip);
     OPM_DoIO(chip);
-    OPM_DoIC(chip);
     OPM_DoTimerA2(chip);
     OPM_DoTimerB2(chip);
     OPM_DoLFO2(chip);
@@ -1875,6 +1907,7 @@ void OPM_Clock(opm_t *chip, int32_t *output, uint8_t *sh1, uint8_t *sh2, uint8_t
     OPM_NoiseChannel(chip);
     OPM_Output(chip);
     OPM_DAC(chip);
+    OPM_DoIC(chip);
     if (sh1)
     {
         *sh1 = chip->smp_sh1;
@@ -1898,6 +1931,10 @@ void OPM_Clock(opm_t *chip, int32_t *output, uint8_t *sh1, uint8_t *sh2, uint8_t
 void OPM_Write(opm_t *chip, uint32_t port, uint8_t data)
 {
     chip->write_data = data;
+    if (chip->ic)
+    {
+        return;
+    }
     if (port & 0x01)
     {
         chip->write_d = 1;
