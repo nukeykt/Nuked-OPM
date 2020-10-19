@@ -1,2 +1,2 @@
 # Nuked-OPM
-Cycle accurate YM2151 emulator (WIP)
+Cycle accurate YM2151 emulator
