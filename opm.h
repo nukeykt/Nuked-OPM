@@ -51,7 +51,6 @@ typedef struct {
     uint8_t lfo_counter1;
     uint8_t lfo_counter1_of1;
     uint8_t lfo_counter1_of2;
-    // uint8_t lfo_counter2_clock;
     uint16_t lfo_counter2;
     uint8_t lfo_counter2_load;
     uint8_t lfo_counter2_of;
@@ -63,6 +62,7 @@ typedef struct {
     uint8_t lfo_frq_update;
     uint8_t lfo_clock;
     uint8_t lfo_clock_lock;
+    uint8_t lfo_clock_test;
     uint8_t lfo_test;
     uint32_t lfo_val;
     uint8_t lfo_val_carry;
@@ -115,7 +115,6 @@ typedef struct {
     uint8_t pg_reset[32];
     uint8_t pg_reset_latch[32];
     uint32_t pg_serial;
-    uint8_t pg_serial_bit;
 
     // Operator
     uint16_t op_phase_in;
@@ -200,6 +199,8 @@ typedef struct {
     uint8_t noise_en;
     uint8_t noise_freq;
 
+
+    // Timer
     uint16_t timer_a_reg;
     uint8_t timer_b_reg;
     uint8_t timer_a_temp;
@@ -218,6 +219,7 @@ typedef struct {
     uint8_t timer_b_do_reset, timer_b_do_load;
     uint8_t timer_b_temp;
     uint8_t timer_b_status;
+    uint8_t timer_irq;
 
     uint8_t lfo_freq_hi;
     uint8_t lfo_freq_lo;

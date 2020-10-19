@@ -484,7 +484,6 @@ static void OPM_PhaseGenerate(opm_t *chip)
 
 static void OPM_PhaseDebug(opm_t *chip)
 {
-    chip->pg_serial_bit = chip->pg_serial & 1;
     chip->pg_serial >>= 1;
     if (chip->cycles == 5)
     {
@@ -873,7 +872,7 @@ static void OPM_OperatorPhase2(opm_t *chip)
     chip->op_phase = (chip->op_phase_in + chip->op_mod_in) & 1023;
 }
 
-static void OPM_OperatorPhase3(opm_t* chip)
+static void OPM_OperatorPhase3(opm_t *chip)
 {
     uint32_t slot = (chip->cycles + 30) % 32;
     uint16_t phase = chip->op_phase & 255;
@@ -915,14 +914,14 @@ static void OPM_OperatorPhase7(opm_t *chip)
     chip->op_pow[0] = chip->op_atten >> 8;
 }
 
-static void OPM_OperatorPhase8(opm_t* chip)
+static void OPM_OperatorPhase8(opm_t *chip)
 {
     uint32_t slot = (chip->cycles + 25) % 32;
     chip->op_exp[1] = chip->op_exp[0];
     chip->op_pow[1] = chip->op_pow[0];
 }
 
-static void OPM_OperatorPhase9(opm_t* chip)
+static void OPM_OperatorPhase9(opm_t *chip)
 {
     uint32_t slot = (chip->cycles + 24) % 32;
     int16_t out = (chip->op_exp[1] << 2) >> (chip->op_pow[1]);
@@ -933,32 +932,32 @@ static void OPM_OperatorPhase9(opm_t* chip)
     chip->op_out[0] = out;
 }
 
-static void OPM_OperatorPhase10(opm_t* chip)
+static void OPM_OperatorPhase10(opm_t *chip)
 {
     uint32_t slot = (chip->cycles + 23) % 32;
     chip->op_out[1] = chip->op_out[0];
 }
 
-static void OPM_OperatorPhase11(opm_t* chip)
+static void OPM_OperatorPhase11(opm_t *chip)
 {
     uint32_t slot = (chip->cycles + 22) % 32;
     chip->op_out[2] = chip->op_out[1];
 }
 
-static void OPM_OperatorPhase12(opm_t* chip)
+static void OPM_OperatorPhase12(opm_t *chip)
 {
     uint32_t slot = (chip->cycles + 21) % 32;
     chip->op_out[3] = chip->op_out[2];
 }
 
-static void OPM_OperatorPhase13(opm_t* chip)
+static void OPM_OperatorPhase13(opm_t *chip)
 {
     uint32_t slot = (chip->cycles + 20) % 32;
     chip->op_out[4] = chip->op_out[3];
     chip->op_connect = chip->ch_connect[slot % 8];
 }
 
-static void OPM_OperatorPhase14(opm_t* chip)
+static void OPM_OperatorPhase14(opm_t *chip)
 {
     uint32_t slot = (chip->cycles + 19) % 32;
     chip->op_mix = chip->op_out[5] = chip->op_out[4];
@@ -976,7 +975,7 @@ static void OPM_OperatorPhase14(opm_t* chip)
     chip->op_mixr = fm_algorithm[chip->op_counter][5][chip->op_connect] && (chip->ch_rl[slot % 8] & 2) != 0;
 }
 
-static void OPM_OperatorPhase15(opm_t* chip)
+static void OPM_OperatorPhase15(opm_t *chip)
 {
     uint32_t slot = (chip->cycles + 18) % 32;
     int16_t mod, mod1 = 0, mod2 = 0;
@@ -1036,7 +1035,7 @@ static void OPM_OperatorCounter(opm_t *chip)
     }
 }
 
-static void OPM_Mixer2(opm_t* chip)
+static void OPM_Mixer2(opm_t *chip)
 {
     uint32_t cycles = (chip->cycles + 30) % 32;
     uint8_t bit;
@@ -1314,7 +1313,7 @@ static void OPM_DoTimerA(opm_t *chip)
     chip->timer_a_val = value & 1023;
 }
 
-static void OPM_DoTimerA2(opm_t* chip)
+static void OPM_DoTimerA2(opm_t *chip)
 {
     if (chip->cycles == 1)
     {
@@ -1364,7 +1363,7 @@ static void OPM_DoTimerB(opm_t *chip)
     }
 }
 
-static void OPM_DoTimerB2(opm_t* chip)
+static void OPM_DoTimerB2(opm_t *chip)
 {
     chip->timer_b_inc = chip->mode_test[2] || (chip->timer_loadb && chip->timer_b_sub_of);
     chip->timer_b_do_load = chip->timer_b_of || (chip->timer_loadb && chip->timer_b_temp);
@@ -1379,6 +1378,11 @@ static void OPM_DoTimerB2(opm_t* chip)
         chip->timer_b_status |= chip->timer_irqb && chip->timer_b_of;
     }
     chip->timer_resetb = 0;
+}
+
+static void OPM_DoTimerIRQ(opm_t *chip)
+{
+    chip->timer_irq = chip->timer_a_status || chip->timer_b_status;
 }
 
 static void OPM_DoLFOMult(opm_t *chip)
@@ -1438,7 +1442,6 @@ static void OPM_DoLFO1(opm_t *chip)
     uint8_t lfo_bit, noise, sum, carry, w[20];
     uint8_t lfo_pm_sign;
     uint8_t ampm_sel = (chip->lfo_bit_counter & 8) != 0;
-    //counter2 += chip->lfo_counter2_clock;
     counter2 += (chip->lfo_counter1_of1 & 2) != 0 || chip->mode_test[3];
     chip->lfo_counter2_of = (counter2 >> 15) & 1;
     if (chip->ic)
@@ -1542,8 +1545,8 @@ static void OPM_DoLFO1(opm_t *chip)
 static void OPM_DoLFO2(opm_t *chip)
 {
     uint8_t c3_step = 0;
-    //chip->lfo_counter2_clock = (chip->lfo_counter1_of1 & 2) != 0 || chip->mode_test[3];
 
+    chip->lfo_clock_test = chip->lfo_clock;
     chip->lfo_clock = (chip->lfo_counter2_of || chip->lfo_test || chip->lfo_counter3_step);
     if ((chip->cycles & 15) == 14)
     {
@@ -1852,6 +1855,7 @@ void OPM_Clock(opm_t *chip, int32_t *output, uint8_t *sh1, uint8_t *sh2, uint8_t
     OPM_PhaseCalcIncrement(chip);
     OPM_PhaseCalcFNumBlock(chip);
 
+    OPM_DoTimerIRQ(chip);
     OPM_DoTimerA(chip);
     OPM_DoTimerB(chip);
     OPM_DoLFOMult(chip);
@@ -1891,7 +1895,7 @@ void OPM_Clock(opm_t *chip, int32_t *output, uint8_t *sh1, uint8_t *sh2, uint8_t
     chip->cycles = (chip->cycles + 1) % 32;
 }
 
-void OPM_Write(opm_t* chip, uint32_t port, uint8_t data)
+void OPM_Write(opm_t *chip, uint32_t port, uint8_t data)
 {
     chip->write_data = data;
     if (port & 0x01)
@@ -1906,7 +1910,25 @@ void OPM_Write(opm_t* chip, uint32_t port, uint8_t data)
 
 uint8_t OPM_Read(opm_t *chip, uint32_t port)
 {
-    return 0;
+    uint16_t testdata;
+    if (chip->mode_test[6])
+    {
+        testdata = chip->op_out[5] | ((chip->eg_serial_bit ^ 1) << 14) | ((chip->pg_serial & 1) << 15);
+        if (chip->mode_test[7])
+        {
+            return testdata & 255;
+        }
+        else
+        {
+            return testdata >> 8;
+        }
+    }
+    return (chip->write_busy << 7) | (chip->timer_b_status << 1) | chip->timer_a_status;
+}
+
+uint8_t OPM_ReadIRQ(opm_t *chip, uint32_t port)
+{
+    return chip->timer_irq;
 }
 
 uint8_t OPM_ReadCT1(opm_t *chip)
@@ -1918,7 +1940,31 @@ uint8_t OPM_ReadCT2(opm_t *chip)
 {
     if(chip->mode_test[3])
     {
-        // TODO: return (chip->lfo_counter_inc >> 1) & 0x01;
+        return chip->lfo_clock_test;
     }
     return chip->io_ct2;
+}
+
+void OPM_SetIC(opm_t *chip, uint8_t ic)
+{
+    if (chip->ic != ic)
+    {
+        chip->ic = ic;
+        if (!ic)
+        {
+            chip->cycles = 0;
+        }
+    }
+}
+
+void OPM_Reset(opm_t *chip)
+{
+    uint32_t i;
+    memset(chip, 0, sizeof(opm_t));
+    OPM_SetIC(chip, 1);
+    for (i = 0; i < 32 * 64; i++)
+    {
+        OPM_Clock(chip, NULL, NULL, NULL, NULL);
+    }
+    OPM_SetIC(chip, 0);
 }
