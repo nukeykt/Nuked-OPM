@@ -21,9 +21,8 @@
  *      siliconpr0n.org(digshadow, John McMaster):
  *          YM2151 and other FM chip decaps and die shots.
  *
- * version: 0.9 beta
+ * version: 0.9.1 beta
  */
-#include <stdio.h>
 #include <string.h>
 #include <stdint.h>
 #include "opm.h"
@@ -330,7 +329,7 @@ static int32_t OPM_LFOApplyPMS(int32_t lfo, int32_t pms)
 
 static int32_t OPM_CalcKCode(int32_t kcf, int32_t lfo, int32_t lfo_sign, int32_t dt)
 {
-    int32_t t2, t3, b0, b1, b2, b3, w2, w3, w4, w6;
+    int32_t t2, t3, b0, b1, b2, b3, w2, w3, w6;
     int32_t overflow1 = 0;
     int32_t overflow2 = 0;
     int32_t negoverflow = 0;
@@ -383,7 +382,6 @@ static int32_t OPM_CalcKCode(int32_t kcf, int32_t lfo, int32_t lfo_sign, int32_t
 
     w2 = (b0 && b1 && b2);
     w3 = (b0 && b3);
-    w4 = !w2 && !w3;
     w6 = (b0 && !w2 && !w3) || (b3 && !b0 && b1);
 
     t2 &= 63;
@@ -1544,8 +1542,6 @@ static void OPM_DoLFO1(opm_t *chip)
 
 static void OPM_DoLFO2(opm_t *chip)
 {
-    uint8_t c3_step = 0;
-
     chip->lfo_clock_test = chip->lfo_clock;
     chip->lfo_clock = (chip->lfo_counter2_of || chip->lfo_test || chip->lfo_counter3_step);
     if ((chip->cycles & 15) == 14)
@@ -1736,8 +1732,8 @@ static void OPM_DoRegWrite(opm_t *chip)
             chip->mode_csm = (chip->write_data >> 7) & 1;
             chip->timer_irqb = (chip->write_data >> 3) & 1;
             chip->timer_irqa = (chip->write_data >> 2) & 1;
-            chip->timer_resetb = (chip->write_data >> 3) & 1;
-            chip->timer_reseta = (chip->write_data >> 2) & 1;
+            chip->timer_resetb = (chip->write_data >> 5) & 1;
+            chip->timer_reseta = (chip->write_data >> 4) & 1;
             chip->timer_loadb = (chip->write_data >> 1) & 1;
             chip->timer_loada = (chip->write_data >> 0) & 1;
             break;
@@ -1758,8 +1754,8 @@ static void OPM_DoRegWrite(opm_t *chip)
             break;
         case 0x1b:
             chip->lfo_wave = chip->write_data & 0x03;
-            chip->io_ct1 = chip->write_data >> 7;
-            chip->io_ct2 = (chip->write_data >> 6) & 0x01;
+            chip->io_ct1 = (chip->write_data >> 6) & 0x01;
+            chip->io_ct2 = chip->write_data >> 7;
             break;
         }
     }
@@ -1963,22 +1959,22 @@ uint8_t OPM_Read(opm_t *chip, uint32_t port)
     return (chip->write_busy << 7) | (chip->timer_b_status << 1) | chip->timer_a_status;
 }
 
-uint8_t OPM_ReadIRQ(opm_t *chip, uint32_t port)
+uint8_t OPM_ReadIRQ(opm_t *chip)
 {
     return chip->timer_irq;
 }
 
 uint8_t OPM_ReadCT1(opm_t *chip)
 {
+    if(chip->mode_test[3])
+    {
+        return chip->lfo_clock_test;
+    }
     return chip->io_ct1;
 }
 
 uint8_t OPM_ReadCT2(opm_t *chip)
 {
-    if(chip->mode_test[3])
-    {
-        return chip->lfo_clock_test;
-    }
     return chip->io_ct2;
 }
 
