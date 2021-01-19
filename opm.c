@@ -21,7 +21,7 @@
  *      siliconpr0n.org(digshadow, John McMaster):
  *          YM2151 and other FM chip decaps and die shots.
  *
- * version: 0.9.1 beta
+ * version: 0.9.2 beta
  */
 #include <string.h>
 #include <stdint.h>
