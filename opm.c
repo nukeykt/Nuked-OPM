@@ -1486,7 +1486,7 @@ static void OPM_DoLFO1(opm_t *chip)
 
     lfo_pm_sign = chip->lfo_wave == 2 ? chip->lfo_trig_sign : chip->lfo_saw_sign;
 
-    w[5] = ampm_sel ? chip->lfo_saw_sign : (chip->lfo_wave != 2 || chip->lfo_trig_sign);
+    w[5] = ampm_sel ? chip->lfo_saw_sign : (chip->lfo_wave != 2 || !chip->lfo_trig_sign);
 
     w[1] = !chip->lfo_clock || chip->lfo_wave == 3 || (chip->cycles & 15) != 15;
     w[2] = chip->lfo_wave == 2 && !w[1];
