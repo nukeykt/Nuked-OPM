@@ -1530,7 +1530,7 @@ static void OPM_DoLFO1(opm_t *chip)
 
     chip->lfo_counter3_clock = (chip->cycles & 15) == 13 && chip->lfo_counter2_of_lock2;
 
-    if ((chip->cycles & 15) == 15)
+    if ((chip->cycles & 15) == 15 && (chip->lfo_bit_counter & 7) == 0)
     {
         chip->lfo_trig_sign = (chip->lfo_val & 0x80) != 0;
         chip->lfo_saw_sign = (chip->lfo_val & 0x100) != 0;
