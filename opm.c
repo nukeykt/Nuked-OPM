@@ -351,7 +351,7 @@ static int32_t OPM_CalcKCode(int32_t kcf, int32_t lfo, int32_t lfo_sign, int32_t
     {
         sum += 64;
     }
-    if (!lfo_sign && !cr)
+    if (!lfo_sign && !cr && (lfo & 192) != 0)
     {
         sum += (-64)&8191;
         negoverflow = 1;
