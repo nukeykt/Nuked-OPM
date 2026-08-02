@@ -287,7 +287,7 @@ static int32_t OPM_LFOApplyPMS(int32_t lfo, int32_t pms)
     {
         top >>= 1;
     }
-    t = (top & 6) == 6 || ((top & 3) == 3 && pms >= 6);
+    t = ((top & 6) == 6 && pms == 7) || ((top & 3) == 3 && pms >= 6);
 
     out = top + ((top >> 2) & 1) + t;
     out = out * 2 + ((lfo >> 4) & 1);
