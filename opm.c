@@ -757,7 +757,10 @@ static void OPM_EnvelopePhase5(opm_t *chip)
         }
         if (chip->eg_incattack)
         {
-            step |= ((~(int32_t)chip->eg_level[slot]) << chip->eg_inc) >> 5;
+            /* Attack increments are 1..4; the product fits int32_t even for
+             * every uint16_t level. Multiplication permits negative operands.
+             */
+            step |= ((~(int32_t)chip->eg_level[slot]) * (1 << chip->eg_inc)) >> 5;
         }
     }
     level += step;
@@ -1170,14 +1173,16 @@ static void OPM_DAC(opm_t *chip)
         exp = (chip->dac_bits >> 10) & 7;
         mant = (chip->dac_bits >> 0) & 1023;
         mant -= 512;
-        chip->dac_output[1] = (mant << exp) >> 1;
+        /* Signed mantissa -512..511, exponent 0..7: product fits int32_t. */
+        chip->dac_output[1] = (mant * (1 << exp)) >> 1;
     }
     if (chip->dac_osh2 && !chip->smp_sh2)
     {
         exp = (chip->dac_bits >> 10) & 7;
         mant = (chip->dac_bits >> 0) & 1023;
         mant -= 512;
-        chip->dac_output[0] = (mant << exp) >> 1;
+        /* Preserve arithmetic-right-shift rounding for negative samples. */
+        chip->dac_output[0] = (mant * (1 << exp)) >> 1;
     }
     chip->dac_bits >>= 1;
     chip->dac_bits |= chip->smp_so << 12;
